@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "nsn",
+	"version": "${version}",
+
+	"name": "Not So New",
+	"description": "Backporting Java 16 back to 8",
+	"authors": [
+		"Chocohead"
+	],
+	"contact": {
+		"sources": "https://github.com/Chocohead/Not-So-New",
+		"issues": "https://github.com/Chocohead/Not-So-New/issues"
+	},
+	"mixins": [
+	],
+	"license": "MPL-2.0",
+	"icon": "assets/optifabric/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"mm:early_risers": [
+			"com.chocohead.nsn.BulkRemapper"
+		],
+		"preLaunch": [
+			"com.chocohead.nsn.LoadGuard"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.8.0",
+		"minecraft": [">=1.17-alpha.21.19.a"],
+		"mm": ">=2.0"
+	}
+}
