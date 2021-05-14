@@ -1,0 +1,16 @@
+accessWidener	v1	intermediary
+accessible	method	net/minecraft/class_778$class_4303	<init>	()V
+#accessible	method	net/minecraft/class_4013	method_29490	(Lnet/minecraft/class_3695;Lnet/minecraft/class_3300;)V
+#accessible	method	net/minecraft/class_3658	method_15856	(Lnet/minecraft/class_3628;)Lnet/minecraft/class_3625;
+#accessible	method	net/minecraft/class_3660	method_15865	(Lnet/minecraft/class_3627;Lnet/minecraft/class_3628;)Lnet/minecraft/class_3625;
+#accessible	method	net/minecraft/class_3659	method_15859	(Lnet/minecraft/class_3627;Lnet/minecraft/class_3627;Lnet/minecraft/class_3628;)Lnet/minecraft/class_3625;
+#accessible	method	net/minecraft/class_3658	method_15857	(Lnet/minecraft/class_3628;II)I
+accessible	method	net/minecraft/class_2568$class_5249	method_27688	(Lcom/google/gson/JsonElement;)Lnet/minecraft/class_2568$class_5249;
+accessible	method	net/minecraft/class_2568$class_5249	method_27687	()Lcom/google/gson/JsonElement;
+accessible	method	net/minecraft/class_2568$class_5249	method_27689	(Lnet/minecraft/class_2561;)Lnet/minecraft/class_2568$class_5249;
+accessible	method	net/minecraft/class_32	method_29583	(Ljava/io/File;Lcom/mojang/datafixers/DataFixer;)Lnet/minecraft/class_5359;
+accessible	method	net/minecraft/class_6032$class_6033	method_35102	()D
+accessible	method	net/minecraft/class_1948$class_5262	method_27824	(Lnet/minecraft/class_1299;Lnet/minecraft/class_2338;Lnet/minecraft/class_2791;)Z
+accessible	method	net/minecraft/class_4700$class_4701	<init>	()V
+accessible	method	net/minecraft/class_1948$class_5262	method_27825	(Lnet/minecraft/class_1308;Lnet/minecraft/class_2791;)V
+accessible	method	net/minecraft/class_1156$class_5524	method_31368	()Z

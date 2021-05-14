@@ -1,5 +1,6 @@
 package com.chocohead.nsn;
 
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,6 +16,10 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import it.unimi.dsi.fastutil.objects.Object2IntMaps;
+import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.launch.common.FabricLauncherBase;
 import net.fabricmc.mapping.tree.ClassDef;
@@ -26,6 +31,17 @@ public class BulkRemapper implements Runnable {
 	private void transform(ClassNode node) {
 		node.version = Opcodes.V1_8;
 
+		Object2IntMap<String> nameToAccess;
+		if (Modifier.isInterface(node.access)) {
+			nameToAccess = new Object2IntOpenHashMap<>();
+
+			for (MethodNode method : node.methods) {
+				nameToAccess.put(method.name.concat(method.desc), method.access);
+			}
+		} else {
+			nameToAccess = Object2IntMaps.emptyMap();
+		}
+
 		List<MethodNode> extraMethods = new ArrayList<>();
 		for (MethodNode method : node.methods) {
 			for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
@@ -35,7 +51,8 @@ public class BulkRemapper implements Runnable {
 				case AbstractInsnNode.INVOKE_DYNAMIC_INSN: {
 					Handle bootstrap = ((InvokeDynamicInsnNode) insn).bsm;
 
-					if ("java/lang/invoke/StringConcatFactory".equals(bootstrap.getOwner())) {
+					switch (bootstrap.getOwner()) {
+					case "java/lang/invoke/StringConcatFactory": {
 						InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
 
 						switch (bootstrap.getName()) {
@@ -55,6 +72,25 @@ public class BulkRemapper implements Runnable {
 							break;
 						}
 						}
+						break;
+					}
+
+					case "java/lang/invoke/LambdaMetafactory": {
+						InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
+
+						if (!nameToAccess.isEmpty() && idin.bsmArgs[1] instanceof Handle) {
+							Handle lambda = (Handle) idin.bsmArgs[1];
+
+							if (node.name.equals(lambda.getOwner()) && lambda.getTag() == Opcodes.H_INVOKEINTERFACE) {
+								int access = nameToAccess.getInt(lambda.getName().concat(lambda.getDesc()));
+
+								if (access != nameToAccess.defaultReturnValue() && Modifier.isPrivate(access)) {
+									idin.bsmArgs[1] = new Handle(Opcodes.H_INVOKESPECIAL, lambda.getOwner(), lambda.getName(), lambda.getDesc(), lambda.isInterface());
+								}
+							}
+						}
+						break;
+					}
 					}
 					break;
 				}
