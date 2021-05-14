@@ -13,6 +13,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.launch.common.FabricLauncherBase;
@@ -30,7 +31,8 @@ public class BulkRemapper implements Runnable {
 			for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
 				AbstractInsnNode insn = it.next();
 
-				if (insn.getType() == AbstractInsnNode.INVOKE_DYNAMIC_INSN) {
+				switch (insn.getType()) {
+				case AbstractInsnNode.INVOKE_DYNAMIC_INSN: {
 					Handle bootstrap = ((InvokeDynamicInsnNode) insn).bsm;
 
 					if ("java/lang/invoke/StringConcatFactory".equals(bootstrap.getOwner())) {
@@ -54,7 +56,63 @@ public class BulkRemapper implements Runnable {
 						}
 						}
 					}
-					
+					break;
+				}
+
+				case AbstractInsnNode.METHOD_INSN: {
+					MethodInsnNode min = (MethodInsnNode) insn;
+
+					switch (min.owner) {
+					case "java/nio/ByteBuffer": {
+						switch (min.name.concat(min.desc)) {
+						case "position(I)Ljava/nio/ByteBuffer;":
+						case "limit(I)Ljava/nio/ByteBuffer;":
+					    case "flip()Ljava/nio/ByteBuffer;":
+					    case "clear()Ljava/nio/ByteBuffer;":
+					    case "mark()Ljava/nio/ByteBuffer;":
+					    case "reset()Ljava/nio/ByteBuffer;":
+					    case "rewind()Ljava/nio/ByteBuffer;":
+					    	min.desc = min.desc.substring(0, min.desc.length() - 11).concat("Buffer;");
+					    	it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/ByteBuffer"));
+					    	break;
+						}
+						break;
+					}
+
+					case "java/nio/FloatBuffer": {
+						switch (min.name.concat(min.desc)) {
+						case "position(I)Ljava/nio/FloatBuffer;":
+						case "limit(I)Ljava/nio/FloatBuffer;":
+					    case "flip()Ljava/nio/FloatBuffer;":
+					    case "clear()Ljava/nio/FloatBuffer;":
+					    case "mark()Ljava/nio/FloatBuffer;":
+					    case "reset()Ljava/nio/FloatBuffer;":
+					    case "rewind()Ljava/nio/FloatBuffer;":
+					    	min.desc = min.desc.substring(0, min.desc.length() - 12).concat("Buffer;");
+					    	it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/FloatBuffer"));
+					    	break;
+						}
+						break;
+					}
+
+					case "java/nio/IntBuffer": {
+						switch (min.name.concat(min.desc)) {
+						case "position(I)Ljava/nio/IntBuffer;":
+						case "limit(I)Ljava/nio/IntBuffer;":
+					    case "flip()Ljava/nio/IntBuffer;":
+					    case "clear()Ljava/nio/IntBuffer;":
+					    case "mark()Ljava/nio/IntBuffer;":
+					    case "reset()Ljava/nio/IntBuffer;":
+					    case "rewind()Ljava/nio/IntBuffer;":
+					    	min.desc = min.desc.substring(0, min.desc.length() - 10).concat("Buffer;");
+					    	it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/IntBuffer"));
+					    	break;
+						}
+						break;
+					}
+					}
+					break;
+				}
 				}
 			}
 		}

@@ -13,6 +13,7 @@
 		"issues": "https://github.com/Chocohead/Not-So-New/issues"
 	},
 	"mixins": [
+		"nsn.mixins.json"
 	],
 	"license": "MPL-2.0",
 	"icon": "assets/optifabric/icon.png",
