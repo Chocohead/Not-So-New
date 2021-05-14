@@ -146,6 +146,13 @@ public class BulkRemapper implements Runnable {
 						}
 						break;
 					}
+
+					case "java/lang/Math": {
+						if ("floorMod".equals(min.name) && "(JI)I".equals(min.desc)) {
+							min.owner = "com/chocohead/nsn/Maths";
+						}
+						break;
+					}
 					}
 					break;
 				}
@@ -163,7 +170,8 @@ public class BulkRemapper implements Runnable {
 		for (ClassDef clazz : mappings.getClasses()) {
 			ClassTinkerers.addTransformation(clazz.getName(activeNamespace), this::transform);
 		}
-		for (String clazz : Arrays.asList("net/minecraft/client/main/Main$2", "com/mojang/blaze3d/systems/RenderSystem", "com/mojang/blaze3d/platform/GlStateManager", "com/mojang/blaze3d/platform/GLX", "com/mojang/blaze3d/platform/TextureUtil", "com/mojang/blaze3d/platform/GlConst")) {
+		for (String clazz : Arrays.asList("net/minecraft/client/main/Main$2", "com/mojang/blaze3d/systems/RenderSystem", "com/mojang/blaze3d/platform/GlStateManager", "com/mojang/blaze3d/platform/GLX",
+				"com/mojang/blaze3d/platform/TextureUtil", "com/mojang/blaze3d/platform/GlConst", "net/minecraft/world/level/ColorResolver")) {
 			ClassTinkerers.addTransformation(clazz, this::transform);
 		}
 	}
