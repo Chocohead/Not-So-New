@@ -19,9 +19,6 @@
 	"icon": "assets/optifabric/icon.png",
 	"environment": "*",
 	"entrypoints": {
-		"mm:early_risers": [
-			"com.chocohead.nsn.BulkRemapper"
-		],
 		"preLaunch": [
 			"com.chocohead.nsn.LoadGuard"
 		]

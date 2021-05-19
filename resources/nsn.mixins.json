@@ -1,7 +1,8 @@
 {
 	"required": true,
-	"package": "com.chocohead.nsn.mixins",
+	"package": "com.chocohead.nsn.mixins.",
 	"compatibilityLevel": "JAVA_8",
+	"plugin": "com.chocohead.nsn.BulkRemapper",
 	"mixins": [
 		"MainMixin"
 	],

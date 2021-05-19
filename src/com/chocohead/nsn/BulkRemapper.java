@@ -10,8 +10,11 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 
 import com.google.common.io.MoreFiles;
@@ -25,6 +28,7 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -36,6 +40,8 @@ import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
+import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.MappingResolver;
@@ -44,8 +50,145 @@ import net.fabricmc.loader.api.metadata.ModMetadata;
 
 import com.chocohead.mm.api.ClassTinkerers;
 
-public class BulkRemapper implements Runnable {
-	private void transform(ClassNode node) {
+public class BulkRemapper implements IMixinConfigPlugin {
+	private String mixin;
+
+	@Override
+	public void onLoad(String mixinPackage) {
+		Persuasion.flip(); //We've done the persuading now
+		StickyTape.tape();
+
+		Set<String> toTransform = new HashSet<>(4096);
+		@SuppressWarnings("resource") //So long as we're careful we're not leaking anything
+		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
+
+		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+			ModMetadata metadata = mod.getMetadata();
+
+			if (!"fabricloader".equals(metadata.getId()) && !"java".equals(metadata.getId()) && !"nsn".equals(metadata.getId())) {
+				try {
+					Files.walkFileTree(mod.getRootPath(), new FileVisitor<Path>() {
+						private final UnaryOperator<String> remapper = "minecraft".equals(metadata.getId()) ? new UnaryOperator<String>() {
+							private final MappingResolver remapper = FabricLoader.getInstance().getMappingResolver();
+
+							@Override
+							public String apply(String clazz) {
+								return remapper.mapClassName("official", clazz.replace('/', '.'));
+							}
+						} : UnaryOperator.identity();
+
+						@Override
+						public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+							return FileVisitResult.CONTINUE;
+						}
+
+						@Override
+						public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+							if ("class".equalsIgnoreCase(MoreFiles.getFileExtension(file))) {
+								try (DataInputStream in = buffer.open(Files.newInputStream(file))) {
+									in.mark(16);
+
+								    int magic = in.readInt();
+								    if (magic != 0xCAFEBABE) {
+								    	System.out.println("Expected magic in " + file + " but got " + magic);
+								    	return FileVisitResult.CONTINUE; //Not a class?
+								    }
+
+								    in.readUnsignedShort(); //Minor version
+								    if (in.readUnsignedShort() > Opcodes.V1_8) {
+								    	in.reset();
+
+								    	ClassReader reader = new ClassReader(in); 
+								    	String name = reader.getClassName();
+								    	//System.out.println("Planning to transform ".concat(name));
+
+								    	MutableBoolean isMixin = new MutableBoolean();
+								    	reader.accept(new ClassVisitor(Opcodes.ASM9) {
+								    		private final String target = Type.getDescriptor(Mixin.class);
+
+								    		@Override
+								    		public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+								    			if (target.equals(descriptor)) isMixin.setTrue();
+								    			return null;
+								    		}
+										}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+								    	if (!isMixin.booleanValue()) toTransform.add(remapper.apply(name));
+								    }// else System.out.println("Not transforming " + MoreFiles.getNameWithoutExtension(file) + " as its version is " + version);
+								} catch (IOException e) {
+									System.err.println("Broke visiting " + file); //Oops
+									e.printStackTrace();
+								}
+							}
+
+							return FileVisitResult.CONTINUE;
+						}
+
+						@Override
+						public FileVisitResult visitFileFailed(Path file, IOException e) {
+							System.err.println("Broke trying to visit " + file); //Oops?
+							e.printStackTrace();
+							return FileVisitResult.CONTINUE;
+						}
+
+						@Override
+						public FileVisitResult postVisitDirectory(Path dir, IOException e) {
+							if (e != null) {//Oops?
+								System.err.println("Broke having visited " + dir);
+								e.printStackTrace();
+							};
+							return FileVisitResult.CONTINUE;
+						}
+					});
+				} catch (IOException e) {//This can only be thrown from the file visitor doing so
+					throw new AssertionError("Unexpected exception", e);
+				}
+			}
+		}
+
+		assert !toTransform.isEmpty();
+		generateMixin(mixin = mixinPackage.replace('.', '/').concat("SuperMixin"), toTransform);
+	}
+
+	private static void generateMixin(String name, Iterable<String> targets) {
+		ClassWriter cw = new ClassWriter(0);
+		cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_INTERFACE, name, null, "java/lang/Object", null);
+
+		AnnotationVisitor mixinAnnotation = cw.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", false);
+		AnnotationVisitor targetAnnotation = mixinAnnotation.visitArray("value");
+		for (String target : targets) targetAnnotation.visit(null, Type.getType('L' + target + ';'));
+		targetAnnotation.visitEnd();
+		mixinAnnotation.visitEnd();
+
+		cw.visitEnd();
+		ClassTinkerers.define(name, cw.toByteArray());
+	}
+
+	@Override
+	public String getRefMapperConfig() {
+		return null;
+	}
+
+	@Override
+	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+		return true;
+	}
+
+	@Override
+	public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
+	}
+
+	@Override
+	public List<String> getMixins() {
+		return Collections.singletonList("SuperMixin");
+	}
+
+	@Override
+	public void preApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
+	}
+
+	@Override
+	public void postApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
+		node.interfaces.remove(mixin);
 		node.version = Opcodes.V1_8;
 
 		Object2IntMap<String> nameToAccess;
@@ -177,95 +320,5 @@ public class BulkRemapper implements Runnable {
 			}
 		}
 		node.methods.addAll(extraMethods);
-	}
-
-	@Override
-	public void run() {
-		Persuasion.flip(); //We've done the persuading now
-		@SuppressWarnings("resource") //So long as we're careful we're not leaking anything
-		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
-
-		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
-			ModMetadata metadata = mod.getMetadata();
-
-			if (!"fabricloader".equals(metadata.getId()) && !"java".equals(metadata.getId()) && !"nsn".equals(metadata.getId())) {
-				try {
-					Files.walkFileTree(mod.getRootPath(), new FileVisitor<Path>() {
-						private final UnaryOperator<String> remapper = "minecraft".equals(metadata.getId()) ? new UnaryOperator<String>() {
-							private final MappingResolver remapper = FabricLoader.getInstance().getMappingResolver();
-
-							@Override
-							public String apply(String clazz) {
-								return remapper.mapClassName("official", clazz.replace('/', '.'));
-							}
-						} : UnaryOperator.identity();
-
-						@Override
-						public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-							return FileVisitResult.CONTINUE;
-						}
-
-						@Override
-						public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-							if ("class".equalsIgnoreCase(MoreFiles.getFileExtension(file))) {
-								try (DataInputStream in = buffer.open(Files.newInputStream(file))) {
-									in.mark(16);
-
-								    int magic = in.readInt();
-								    if (magic != 0xCAFEBABE) {
-								    	System.out.println("Expected magic in " + file + " but got " + magic);
-								    	return FileVisitResult.CONTINUE; //Not a class
-								    }
-
-								    in.readUnsignedShort(); //Minor version
-								    if (in.readUnsignedShort() > Opcodes.V1_8) {
-								    	in.reset();
-
-								    	ClassReader reader = new ClassReader(in); 
-								    	String name = reader.getClassName();
-								    	//System.out.println("Planning to transform ".concat(name));
-
-								    	MutableBoolean isMixin = new MutableBoolean();
-								    	reader.accept(new ClassVisitor(Opcodes.ASM9) {
-								    		private final String target = Type.getDescriptor(Mixin.class);
-
-								    		@Override
-								    		public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-								    			if (target.equals(descriptor)) isMixin.setTrue();
-								    			return null;
-								    		}
-										}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
-								    	if (!isMixin.booleanValue()) ClassTinkerers.addTransformation(remapper.apply(name), BulkRemapper.this::transform);
-								    }// else System.out.println("Not transforming " + MoreFiles.getNameWithoutExtension(file) + " as its version is " + version);
-								} catch (IOException e) {
-									System.err.println("Broke visiting " + file); //Oops
-									e.printStackTrace();
-								}
-							}
-
-							return FileVisitResult.CONTINUE;
-						}
-
-						@Override
-						public FileVisitResult visitFileFailed(Path file, IOException e) {
-							System.err.println("Broke trying to visit " + file); //Oops?
-							e.printStackTrace();
-							return FileVisitResult.CONTINUE;
-						}
-
-						@Override
-						public FileVisitResult postVisitDirectory(Path dir, IOException e) {
-							if (e != null) {//Oops?
-								System.err.println("Broke having visited " + dir);
-								e.printStackTrace();
-							};
-							return FileVisitResult.CONTINUE;
-						}
-					});
-				} catch (IOException e) {//This can only be thrown from the file visitor doing so
-					throw new AssertionError("Unexpected exception", e);
-				}
-			}
-		}
 	}
 }
