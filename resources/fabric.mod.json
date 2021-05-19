@@ -26,6 +26,9 @@
 			"com.chocohead.nsn.LoadGuard"
 		]
 	},
+	"languageAdapters": {
+		"nsn:entrypoint": "com.chocohead.nsn.Persuasion"
+	},
 	"depends": {
 		"fabricloader": ">=0.8.0",
 		"minecraft": [">=1.17-alpha.21.19.a"],
