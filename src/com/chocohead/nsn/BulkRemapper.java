@@ -92,7 +92,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 								    int magic = in.readInt();
 								    if (magic != 0xCAFEBABE) {
-								    	System.out.println("Expected magic in " + file + " but got " + magic);
+								    	System.err.printf("Expected magic in %s but got %X%n", file, magic);
 								    	return FileVisitResult.CONTINUE; //Not a class?
 								    }
 
@@ -111,7 +111,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								    		humbleInterfaces.addAll(checker.getTargets());
 								    	}
 								    	checker.reset();
-								    }// else System.out.println("Not transforming " + MoreFiles.getNameWithoutExtension(file) + " as its version is " + version);
+								    }// else System.out.printf("Not transforming %s as its version is %d%n", MoreFiles.getNameWithoutExtension(file), version);
 								} catch (IOException e) {
 									System.err.println("Broke visiting " + file); //Oops
 									e.printStackTrace();

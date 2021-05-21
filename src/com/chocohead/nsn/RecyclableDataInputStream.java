@@ -18,6 +18,16 @@ public class RecyclableDataInputStream extends DataInputStream {
 			this.in = in;
 			return this;
 		}
+
+		@Override
+		public void close() throws IOException {
+			try {
+				super.close();
+			} finally {
+				count = pos = 0;
+				markpos = -1;
+			}
+		}
 	}
 	private final RecyclableBuffer buffer = new RecyclableBuffer();
 
