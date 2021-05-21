@@ -2,6 +2,7 @@ package com.chocohead.nsn;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -10,16 +11,15 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.io.MoreFiles;
-
-import org.apache.commons.lang3.mutable.MutableBoolean;
 
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
@@ -27,21 +27,22 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
-import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+import org.spongepowered.asm.mixin.transformer.ext.Extensions;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.MappingResolver;
@@ -51,7 +52,7 @@ import net.fabricmc.loader.api.metadata.ModMetadata;
 import com.chocohead.mm.api.ClassTinkerers;
 
 public class BulkRemapper implements IMixinConfigPlugin {
-	private String mixin;
+	final Set<String> humbleInterfaces = new HashSet<>(64);
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -76,6 +77,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								return remapper.mapClassName("official", clazz.replace('/', '.'));
 							}
 						} : UnaryOperator.identity();
+						private final MixinChecker checker = new MixinChecker();
 
 						@Override
 						public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
@@ -101,18 +103,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								    	ClassReader reader = new ClassReader(in); 
 								    	String name = reader.getClassName();
 								    	//System.out.println("Planning to transform ".concat(name));
+								    	reader.accept(checker, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
 
-								    	MutableBoolean isMixin = new MutableBoolean();
-								    	reader.accept(new ClassVisitor(Opcodes.ASM9) {
-								    		private final String target = Type.getDescriptor(Mixin.class);
-
-								    		@Override
-								    		public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-								    			if (target.equals(descriptor)) isMixin.setTrue();
-								    			return null;
-								    		}
-										}, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
-								    	if (!isMixin.booleanValue()) toTransform.add(remapper.apply(name));
+								    	if (!checker.isMixin()) {
+								    		toTransform.add(remapper.apply(name));
+								    	} else if (Modifier.isInterface(reader.getAccess())) {
+								    		humbleInterfaces.addAll(checker.getTargets());
+								    	}
+								    	checker.reset();
 								    }// else System.out.println("Not transforming " + MoreFiles.getNameWithoutExtension(file) + " as its version is " + version);
 								} catch (IOException e) {
 									System.err.println("Broke visiting " + file); //Oops
@@ -146,7 +144,32 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		}
 
 		assert !toTransform.isEmpty();
-		generateMixin(mixin = mixinPackage.replace('.', '/').concat("SuperMixin"), toTransform);
+		mixinPackage = mixinPackage.replace('.', '/');
+		generateMixin(mixinPackage.concat("SuperMixin"), toTransform);
+		generateMixin(mixinPackage.concat("InterfaceMixin"), humbleInterfaces);
+
+		Extensions extensions = null;
+		try {
+			Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
+			if (transformer == null) throw new IllegalStateException("Not running with a transformer?");
+
+			for (Field f : transformer.getClass().getDeclaredFields()) {
+				if (f.getType() == Extensions.class) {
+					f.setAccessible(true); //Knock knock, we need this
+					extensions = (Extensions) f.get(transformer);
+					break;
+				}
+			}
+
+			if (extensions == null) {
+				String foundFields = Arrays.stream(transformer.getClass().getDeclaredFields()).map(f -> f.getType() + " " + f.getName()).collect(Collectors.joining(", "));
+				throw new NoSuchFieldError("Unable to find extensions field, only found " + foundFields);
+			}
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException("Running with a transformer that doesn't have extensions?", e);
+		}
+
+		extensions.add(new Extension(mixinPackage));
 	}
 
 	private static void generateMixin(String name, Iterable<String> targets) {
@@ -179,16 +202,25 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 	@Override
 	public List<String> getMixins() {
-		return Collections.singletonList("SuperMixin");
+		return ImmutableList.of("SuperMixin", "InterfaceMixin");
 	}
 
 	@Override
 	public void preApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
+		if (mixinClassName.endsWith(".InterfaceMixin")) {
+			MethodNode method = new MethodNode(Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "k££makeSomeMagic££", "()V", null, null);
+			method.instructions.add(new InsnNode(Opcodes.RETURN));
+			node.methods.add(method);
+		}
 	}
 
 	@Override
 	public void postApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
-		node.interfaces.remove(mixin);
+		node.interfaces.remove(mixinClassName);
+		if (mixinClassName.endsWith(".SuperMixin")) transform(node);
+	}
+
+	static void transform(ClassNode node) {
 		node.version = Opcodes.V1_8;
 
 		Object2IntMap<String> nameToAccess;
