@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.Iterables;
+
 import org.apache.commons.lang3.reflect.FieldUtils;
 
 import org.objectweb.asm.AnnotationVisitor;
@@ -62,6 +64,8 @@ public class LoadGuard implements PreLaunchEntrypoint {
 
 			for (MethodNode method : node.methods) {
 				if (Modifier.isStatic(method.access) && (Annotations.getVisible(method, Accessor.class) != null || Annotations.getVisible(method, Invoker.class) != null)) {
+					String target = Iterables.getOnlyElement(accessor.getTargetClasses()); //If it has an accessor or invoker Mixin mandates there only be one target
+					BulkRemapper.HUMBLE_INTERFACES.remove(target.replace('.', '/'), node.name);
 	                continue on;
 	            }
 			}

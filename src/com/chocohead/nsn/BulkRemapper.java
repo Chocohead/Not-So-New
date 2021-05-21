@@ -18,7 +18,9 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.SetMultimap;
 import com.google.common.io.MoreFiles;
 
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -52,7 +54,7 @@ import net.fabricmc.loader.api.metadata.ModMetadata;
 import com.chocohead.mm.api.ClassTinkerers;
 
 public class BulkRemapper implements IMixinConfigPlugin {
-	final Set<String> humbleInterfaces = new HashSet<>(64);
+	static final SetMultimap<String, String> HUMBLE_INTERFACES = HashMultimap.create(64, 4);
 
 	@Override
 	public void onLoad(String mixinPackage) {
@@ -108,7 +110,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								    	if (!checker.isMixin()) {
 								    		toTransform.add(remapper.apply(name));
 								    	} else if (Modifier.isInterface(reader.getAccess())) {
-								    		humbleInterfaces.addAll(checker.getTargets());
+								    		for (String target : checker.getTargets()) {
+								    			HUMBLE_INTERFACES.put(target, name);
+								    		}
 								    	}
 								    	checker.reset();
 								    }// else System.out.printf("Not transforming %s as its version is %d%n", MoreFiles.getNameWithoutExtension(file), version);
@@ -146,7 +150,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		assert !toTransform.isEmpty();
 		mixinPackage = mixinPackage.replace('.', '/');
 		generateMixin(mixinPackage.concat("SuperMixin"), toTransform);
-		generateMixin(mixinPackage.concat("InterfaceMixin"), humbleInterfaces);
+		generateMixin(mixinPackage.concat("InterfaceMixin"), HUMBLE_INTERFACES.keySet());
 
 		Extensions extensions = null;
 		try {
@@ -207,7 +211,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 	@Override
 	public void preApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
-		if (mixinClassName.endsWith(".InterfaceMixin")) {
+		if (mixinClassName.endsWith(".InterfaceMixin") && HUMBLE_INTERFACES.containsKey(node.name)) {
 			MethodNode method = new MethodNode(Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "k££makeSomeMagic££", "()V", null, null);
 			method.instructions.add(new InsnNode(Opcodes.RETURN));
 			node.methods.add(method);
