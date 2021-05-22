@@ -21,7 +21,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 archivesBaseName = 'NotSoNew'
-version = '2.4'
+version = '2.5'
 
 repositories {
 	maven { 

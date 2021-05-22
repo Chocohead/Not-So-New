@@ -35,6 +35,8 @@ public class MixinChecker extends ClassVisitor {
 	};
 	final Set<String> targets = new ObjectOpenHashSet<>();
 	private boolean isMixin;
+	private String nestHost;
+	private final Set<String> nestMates = new ObjectOpenHashSet<>();
 
 	public MixinChecker() {
 		super(Opcodes.ASM9);
@@ -50,6 +52,16 @@ public class MixinChecker extends ClassVisitor {
 		return null;
 	}
 
+	@Override
+	public void visitNestHost(String nestHost) {
+		this.nestHost = nestHost;
+	}
+
+	@Override
+	public void visitNestMember(String nestMember) {
+		nestMates.add(nestMember);
+	}
+
 	public boolean isMixin() {
 		return isMixin;
 	}
@@ -58,8 +70,26 @@ public class MixinChecker extends ClassVisitor {
 		return Collections.unmodifiableSet(targets);
 	}
 
+	public boolean inNestedSystem() {
+		return nestHost != null || !nestMates.isEmpty();
+	}
+
+	public boolean isNestHost() {
+		return inNestedSystem() && nestHost == null;
+	}
+
+	public String getNestHost() {
+		return nestHost;
+	}
+
+	public Set<String> getNestMates() {
+		return Collections.unmodifiableSet(nestMates);
+	}
+
 	public void reset() {
 		isMixin = false;
 		targets.clear();
+		nestHost = null;
+		nestMates.clear();
 	}
 }

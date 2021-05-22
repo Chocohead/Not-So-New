@@ -11,30 +11,43 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.io.MoreFiles;
 
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Handle;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -62,6 +75,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		StickyTape.tape();
 
 		Set<String> toTransform = new HashSet<>(4096);
+		SetMultimap<String, ClassReader> nests = Multimaps.newSetMultimap(new HashMap<>(128), ReferenceOpenHashSet::new);
 		@SuppressWarnings("resource") //So long as we're careful we're not leaking anything
 		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
 
@@ -109,11 +123,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 								    	if (!checker.isMixin()) {
 								    		toTransform.add(remapper.apply(name));
+
+								    		if (name.equals(remapper.apply(name)) && checker.inNestedSystem()) {
+									    		nests.put(checker.isNestHost() ? name : checker.getNestHost(), reader);
+									    	}								    		
 								    	} else if (Modifier.isInterface(reader.getAccess())) {
 								    		for (String target : checker.getTargets()) {
 								    			HUMBLE_INTERFACES.put(target, name);
 								    		}
 								    	}
+
 								    	checker.reset();
 								    }// else System.out.printf("Not transforming %s as its version is %d%n", MoreFiles.getNameWithoutExtension(file), version);
 								} catch (IOException e) {
@@ -152,6 +171,26 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		generateMixin(mixinPackage.concat("SuperMixin"), toTransform);
 		generateMixin(mixinPackage.concat("InterfaceMixin"), HUMBLE_INTERFACES.keySet());
 
+		if (!nests.isEmpty()) {
+			try {
+				resolveNestSystem(Collections.singleton(new ClassReader(Object.class.getName())));
+			} catch (IOException e) {
+				//Only warming up for class loading
+			}
+			List<CompletableFuture<List<Runnable>>> tasks = new ArrayList<>(nests.asMap().size());
+
+			for (Collection<ClassReader> system : nests.asMap().values()) {
+				System.out.println(system.stream().map(ClassReader::getClassName).collect(Collectors.joining(", ", "Analysing: [", "]")));
+				tasks.add(CompletableFuture.supplyAsync(() -> resolveNestSystem(system)));
+			}
+
+			for (CompletableFuture<List<Runnable>> future : tasks) {
+				for (Runnable task : future.join()) {
+					task.run(); //Avoid causing CMEs trying to transform multiple classes at the same time
+				}
+			}
+		}
+
 		Extensions extensions = null;
 		try {
 			Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
@@ -188,6 +227,121 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 		cw.visitEnd();
 		ClassTinkerers.define(name, cw.toByteArray());
+	}
+
+	private static List<Runnable> resolveNestSystem(Collection<ClassReader> system) {
+		class Member {
+			public final String name;
+			public final Set<String> members;
+			public final Set<String> wantedMethods = new HashSet<>();
+			public final Set<String> wantedFields = new HashSet<>();
+			public final Map<String, Set<String>> usedMethods;
+			public final Map<String, Set<String>> usedFields;
+
+			Member(String name, Set<String> members, Map<String, Set<String>> usedMethods, Map<String, Set<String>> usedFields) {
+				this.name = name;
+				this.members = Collections.unmodifiableSet(members);
+				this.usedMethods = Collections.unmodifiableMap(usedMethods);
+				this.usedFields = Collections.unmodifiableMap(usedFields);
+			}
+		}
+		Map<String, Member> ownerToMembers = new HashMap<>(system.size());
+
+		for (ClassReader reader : system) {
+			Set<String> members = new HashSet<>();
+			Map<String, Set<String>> usedMethods = new HashMap<>();
+			Map<String, Set<String>> usedFields = new HashMap<>();
+
+			reader.accept(new ClassVisitor(Opcodes.ASM9) {
+				@Override
+				public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
+					if (Modifier.isPrivate(access)) members.add(name + '#' + descriptor);
+
+					return null;
+				}
+
+				@Override
+				public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+					if (Modifier.isPrivate(access)) members.add(name.concat(descriptor));
+
+					return new MethodVisitor(api) {
+						@Override
+						public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
+							usedFields.computeIfAbsent(owner, k -> new HashSet<>()).add(name + '#' + descriptor);
+						}
+
+						@Override
+						public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
+							usedMethods.computeIfAbsent(owner, k -> new HashSet<>()).add(name.concat(descriptor));
+						}
+
+						@Override
+						public void visitInvokeDynamicInsn(String name, String descriptor, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
+							//Maybe
+						}
+					};
+				}
+			}, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+
+			String name = reader.getClassName();
+			ownerToMembers.put(name, new Member(name, members, usedMethods, usedFields));
+		}
+
+		for (Member member : ownerToMembers.values()) {
+			for (Entry<String, Set<String>> entry : member.usedFields.entrySet()) {
+				Member owner = ownerToMembers.get(entry.getKey());
+
+				if (owner != null) {
+					for (String field : entry.getValue()) {
+						if (owner.members.contains(field)) {
+							owner.wantedFields.add(field);
+						}
+					}
+				}
+			}
+			for (Entry<String, Set<String>> entry : member.usedMethods.entrySet()) {
+				Member owner = ownerToMembers.get(entry.getKey());
+
+				if (owner != null) {
+					for (String method : entry.getValue()) {
+						if (owner.members.contains(method)) {
+							owner.wantedMethods.add(method);
+						}
+					}
+				}
+			}
+		}
+
+		List<Runnable> tasks = new ArrayList<>(ownerToMembers.size());
+		for (Member member : ownerToMembers.values()) {
+			Set<String> neededMethods = member.wantedMethods;
+			Set<String> neededFields = member.wantedFields;
+			if (neededFields.isEmpty() && neededMethods.isEmpty()) continue;
+
+			tasks.add(() -> {
+				ClassTinkerers.addTransformation(member.name, node -> {
+					if (!neededMethods.isEmpty()) {
+						Map<String, MethodNode> methodNodes = node.methods.stream().collect(Collectors.toMap(method -> method.name.concat(method.desc), Function.identity()));
+
+						for (String method : neededMethods) {
+							MethodNode m = methodNodes.get(method);
+							m.access = (m.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
+						}
+					}
+
+					if (!neededFields.isEmpty()) {
+						Map<String, FieldNode> fieldNodes = node.fields.stream().collect(Collectors.toMap(field -> field.name + '#' + field.desc, Function.identity()));
+
+						for (String field : neededFields) {
+							FieldNode f = fieldNodes.get(field);
+							f.access = (f.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
+						}
+					}							
+				});
+			});
+		}
+
+		return tasks;
 	}
 
 	@Override
