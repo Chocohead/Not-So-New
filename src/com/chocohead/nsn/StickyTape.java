@@ -1,12 +1,16 @@
 package com.chocohead.nsn;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.transformer.ClassInfo;
 
 public class StickyTape {
@@ -38,5 +42,20 @@ public class StickyTape {
 
 	private static void addMethod(ClassNode node, int access, String name, String desc, Consumer<MethodNode> method) {
 		method.accept((MethodNode) node.visitMethod(access, name, desc, null, null));
+	}
+
+	public static <T> T grabTransformer(Class<T> type, String name) throws ReflectiveOperationException {
+		Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
+		if (transformer == null) throw new IllegalStateException("Not running with a transformer?");
+
+		for (Field f : transformer.getClass().getDeclaredFields()) {
+			if (f.getType() == type) {
+				f.setAccessible(true); //Knock knock, we need this
+				return type.cast(f.get(transformer));
+			}
+		}
+
+		String foundFields = Arrays.stream(transformer.getClass().getDeclaredFields()).map(f -> f.getType() + " " + f.getName()).collect(Collectors.joining(", "));
+		throw new NoSuchFieldError("Unable to find " + name + " field, only found " + foundFields);
 	}
 }

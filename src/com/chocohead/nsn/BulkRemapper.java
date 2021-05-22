@@ -2,7 +2,6 @@ package com.chocohead.nsn;
 
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -54,7 +53,6 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
-import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.transformer.ext.Extensions;
@@ -191,28 +189,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			}
 		}
 
-		Extensions extensions = null;
 		try {
-			Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
-			if (transformer == null) throw new IllegalStateException("Not running with a transformer?");
+			Extensions extensions = StickyTape.grabTransformer(Extensions.class, "extensions");
 
-			for (Field f : transformer.getClass().getDeclaredFields()) {
-				if (f.getType() == Extensions.class) {
-					f.setAccessible(true); //Knock knock, we need this
-					extensions = (Extensions) f.get(transformer);
-					break;
-				}
-			}
-
-			if (extensions == null) {
-				String foundFields = Arrays.stream(transformer.getClass().getDeclaredFields()).map(f -> f.getType() + " " + f.getName()).collect(Collectors.joining(", "));
-				throw new NoSuchFieldError("Unable to find extensions field, only found " + foundFields);
-			}
-		} catch (ReflectiveOperationException e) {
+			extensions.add(new Extension(mixinPackage));
+		} catch (ReflectiveOperationException | ClassCastException e) {
 			throw new IllegalStateException("Running with a transformer that doesn't have extensions?", e);
 		}
-
-		extensions.add(new Extension(mixinPackage));
 	}
 
 	private static void generateMixin(String name, Iterable<String> targets) {

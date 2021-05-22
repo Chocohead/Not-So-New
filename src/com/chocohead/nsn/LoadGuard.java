@@ -1,11 +1,8 @@
 package com.chocohead.nsn;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
 
@@ -19,7 +16,6 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
@@ -35,27 +31,12 @@ public class LoadGuard implements PreLaunchEntrypoint {
 	public void onPreLaunch() {
 		Map<String, IMixinInfo> accessors;
 		try {
-			Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
-			if (transformer == null) throw new IllegalStateException("Not running with a transformer?");
-
-			MixinProcessor processor = null;
-			for (Field f : transformer.getClass().getDeclaredFields()) {
-				if (f.getType() == MixinProcessor.class) {
-					f.setAccessible(true); //Knock knock, we need this
-					processor = (MixinProcessor) f.get(transformer);
-					break;
-				}
-			}
-
-			if (processor == null) {
-				String foundFields = Arrays.stream(transformer.getClass().getDeclaredFields()).map(f -> f.getType() + " " + f.getName()).collect(Collectors.joining(", "));
-				throw new NoSuchFieldError("Unable to find processor field, only found " + foundFields);
-			}
+			MixinProcessor processor = StickyTape.grabTransformer(MixinProcessor.class, "processor");
 
 			Object postProcessor = FieldUtils.readDeclaredField(processor, "postProcessor", true);
 			accessors = (Map<String, IMixinInfo>) FieldUtils.readDeclaredField(postProcessor, "accessorMixins", true);
-		} catch (ReflectiveOperationException e) {
-			throw new IllegalStateException("Running with a transformer that doesn't have extensions?", e);
+		} catch (ReflectiveOperationException | ClassCastException e) {
+			throw new IllegalStateException("Running with a transformer that doesn't have a processor?", e);
 		}
 
 		on: for (IMixinInfo accessor : accessors.values()) {
@@ -77,7 +58,7 @@ public class LoadGuard implements PreLaunchEntrypoint {
 
 				MethodNode method = (MethodNode) attachMethod(realNode);
 				((Set<Object>) FieldUtils.readDeclaredField(info, "methods", true)).add(info.new Method(method, true));
-			} catch (ReflectiveOperationException e) {
+			} catch (ReflectiveOperationException | ClassCastException e) {
 				System.err.println("Wonderful fixes have encountered a less wonderful moment");
 				e.printStackTrace();
 				break on;
