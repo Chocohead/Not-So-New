@@ -120,9 +120,9 @@ public class Stringy {
 				visitor.load(arg, type);
 				Label skip = new Label();
 				visitor.ifnonnull(skip);
-				visitor.visitLdcInsn("null");
+				visitor.aconst("null");
 				visitor.store(arg, type);
-				visitor.visitLabel(skip);
+				visitor.mark(skip);
 			}
 		}
 

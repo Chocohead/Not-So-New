@@ -24,6 +24,7 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import com.google.common.base.Verify;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimaps;
@@ -364,6 +365,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 	static void transform(ClassNode node) {
 		node.version = Opcodes.V1_8;
 
+		if ((node.access & Opcodes.ACC_RECORD) != 0) {
+			node.access &= ~Opcodes.ACC_RECORD;
+			node.superName = "java/lang/Object"; //Record only defines some abstract methods
+		}
+
 		Object2IntMap<String> nameToAccess;
 		if (Modifier.isInterface(node.access)) {
 			nameToAccess = new Object2IntOpenHashMap<>();
@@ -421,6 +427,48 @@ public class BulkRemapper implements IMixinConfigPlugin {
 									idin.bsmArgs[1] = new Handle(Opcodes.H_INVOKESPECIAL, lambda.getOwner(), lambda.getName(), lambda.getDesc(), lambda.isInterface());
 								}
 							}
+						}
+						break;
+					}
+
+					case "java/lang/runtime/ObjectMethods": {
+						InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
+
+						if ("bootstrap".equals(bootstrap.getName())) {
+							Handle[] fields = Arrays.copyOfRange(idin.bsmArgs, 2, idin.bsmArgs.length, Handle[].class);
+
+							if (idin.bsmArgs[1] != null) {//Is allowed to be null when idin.name is equals or hashCode
+								String template = (String) idin.bsmArgs[1];
+
+								if (template.isEmpty()) {
+									Verify.verify(fields.length == 0, "Expected no getters but received %s", Arrays.toString(fields));
+								} else {
+									String[] names = Arrays.stream(fields).map(Handle::getName).toArray(String[]::new);
+									Verify.verify(Arrays.equals(template.split(";"), names), "Expected %s == %s", template, Arrays.toString(names));
+								}
+							}
+
+							MethodNode implementation;
+							switch (idin.name) {
+							case "equals":
+								implementation = Recordy.makeEquals(node.name, fields);
+								break;
+
+							case "hashCode":
+								implementation = Recordy.makeHashCode(node.name, fields);
+								break;
+
+							case "toString":
+								implementation = Recordy.makeToString(node.name, fields);
+								break;
+
+							default:
+								throw new IllegalArgumentException("Unexpected object method name: " + idin.name);
+							}
+
+							//System.out.println("Transforming " + idin.name + idin.desc + " to " + concat.name + concat.desc);
+							it.set(new MethodInsnNode(Opcodes.INVOKESPECIAL, node.name, implementation.name, implementation.desc));
+							extraMethods.add(implementation);
 						}
 						break;
 					}
@@ -484,6 +532,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						if ("floorMod".equals(min.name) && "(JI)I".equals(min.desc)) {
 							min.owner = "com/chocohead/nsn/Maths";
 						}
+						break;
+					}
+
+					case "java/lang/Record": {
+						min.owner = "java/lang/Object";
 						break;
 					}
 					}
