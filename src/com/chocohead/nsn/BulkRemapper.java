@@ -50,6 +50,8 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
+import org.objectweb.asm.tree.JumpInsnNode;
+import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
@@ -531,6 +533,61 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/lang/Math": {
 						if ("floorMod".equals(min.name) && "(JI)I".equals(min.desc)) {
 							min.owner = "com/chocohead/nsn/Maths";
+						}
+						break;
+					}
+
+					case "java/util/Optional": {
+						if ("isEmpty".equals(min.name) && "()Z".equals(min.desc)) {
+							min.name = "isPresent";
+							LabelNode present = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							LabelNode next = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.GOTO, next));
+							it.add(present);
+							it.add(new InsnNode(Opcodes.ICONST_1));
+							it.add(next);
+						}
+						break;
+					}
+
+					case "java/util/List": {
+						switch (min.name.concat(min.desc)) {
+						case "of()Ljava/util/List;":
+							min.owner = "java/util/Collections";
+							min.name = "emptyList";
+							break;
+
+						case "of(Ljava/lang/Object;)Ljava/util/List;":
+							min.owner = "java/util/Collections";
+							min.name = "singletonList";
+							break;
+
+						case "of([Ljava/lang/Object;)Ljava/util/List;":
+							min.name = "copyOf";
+						case "of(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/List;":
+						case "copyOf(Ljava/util/Collection;)Ljava/util/List;":
+							min.owner = "com/google/common/collect/ImmutableList";
+							min.desc = min.desc.substring(0, min.desc.length() - 15).concat("com/google/common/collect/ImmutableList;");
+							break;
+						}
+						break;
+					}
+
+					case "java/lang/String": {
+						if ("repeat".equals(min.name) && "(I)Ljava/lang/String;".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/google/common/base/Strings"; //Guava's implementation is closer than Apache's StringUtils
+							min.desc = "(Ljava/lang/String;I)Ljava/lang/String;";
 						}
 						break;
 					}
