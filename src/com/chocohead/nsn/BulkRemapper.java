@@ -596,6 +596,21 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						min.owner = "java/lang/Object";
 						break;
 					}
+
+					case "java/util/stream/Collectors": {
+						if ("toUnmodifiableList".equals(min.name) && "()Ljava/util/stream/Collector;".equals(min.desc)) {
+							min.owner = "com/google/common/collect/ImmutableList";
+							min.name = "toImmutableList";
+						}
+						break;
+					}
+
+					case "java/util/Map": {
+						if ("entry".equals(min.name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(min.desc)) {
+							min.owner = "com/chocohead/nsn/ImmutableNonullEntry"; //A non-null and non-Serialisable Entry is a bit weird
+						}
+						break;
+					}
 					}
 					break;
 				}

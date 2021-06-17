@@ -74,7 +74,7 @@ public class Recordy {
 	}
 
 	public static MethodNode makeEquals(String type, Handle... fields) {
-		return makeMethod("hashCode", "(Ljava/lang/Object;)Z", method -> {
+		return makeMethod("equals", "(Ljava/lang/Object;)Z", method -> {
 			Type thisType = Type.getObjectType(type);
 
 			method.load(1, InstructionAdapter.OBJECT_TYPE);
