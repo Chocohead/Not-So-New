@@ -32,5 +32,10 @@ public class Extension implements IExtension {
 	public void export(MixinEnvironment env, String name, boolean force, ClassNode node) {
 		//System.out.println("Watching " + name + " go past (version " + node.version + ')');
 		if (node.version > Opcodes.V1_8) BulkRemapper.transform(node);
+
+		node.interfaces.removeIf(interfaceName -> {
+			//This breaks Java's detection of annotation classes (as they only extend a single type)
+			return interfaceName.startsWith(mixinPackage);
+		});
 	}
 }
