@@ -251,6 +251,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					if (Modifier.isPrivate(access)) members.add(name.concat(descriptor));
 
 					return new MethodVisitor(api) {
+						private void visitMethod(String owner, String name, String descriptor) {
+							usedMethods.computeIfAbsent(owner, k -> new HashSet<>()).add(name.concat(descriptor));
+						}
+
 						@Override
 						public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
 							usedFields.computeIfAbsent(owner, k -> new HashSet<>()).add(name + '#' + descriptor);
@@ -258,12 +262,19 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 						@Override
 						public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
-							usedMethods.computeIfAbsent(owner, k -> new HashSet<>()).add(name.concat(descriptor));
+							visitMethod(owner, name, descriptor);
 						}
 
 						@Override
 						public void visitInvokeDynamicInsn(String name, String descriptor, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
-							//Maybe
+							visitMethod(bootstrapMethodHandle.getOwner(), bootstrapMethodHandle.getName(), bootstrapMethodHandle.getDesc());
+
+							for (Object argument : bootstrapMethodArguments) {
+								if (argument instanceof Handle) {
+									Handle handle = (Handle) argument;
+									visitMethod(handle.getOwner(), handle.getName(), handle.getDesc());
+								}
+							}
 						}
 					};
 				}
