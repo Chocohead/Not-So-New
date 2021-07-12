@@ -21,6 +21,9 @@
 	"entrypoints": {
 		"preLaunch": [
 			"com.chocohead.nsn.LoadGuard"
+		],
+		"mm:early_risers": [
+			"com.chocohead.nsn.Nester"
 		]
 	},
 	"languageAdapters": {
