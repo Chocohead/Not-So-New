@@ -1,17 +1,17 @@
 buildscript {
-    repositories {
-    	mavenCentral()
+	repositories {
 		maven {
-	        name = 'Fabric'
-	        url = 'https://maven.fabricmc.net/'
-        }
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
 		maven { 
 			name = 'Jitpack'
 			url 'https://jitpack.io/'
 		}
 	}
 	dependencies {
-        classpath 'com.github.Chocohead:Fabric-Loom:2956f3d'
+		classpath 'com.github.Chocohead:Fabric-Loom:66ed9fe'
 	}
 }
 
@@ -21,7 +21,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 archivesBaseName = 'NotSoNew'
-version = '2.11'
+version = '3.0'
 
 repositories {
 	maven { 
@@ -38,8 +38,8 @@ dependencies {
 	mappings "net.fabricmc:yarn:$mapping:v2"
 
 	modImplementation 'net.fabricmc:fabric-loader:0.11.3'
-    //modImplementation 'net.fabricmc.fabric-api:fabric-api:0.34.3+1.17'
-	include modApi('com.github.Chocohead:Fabric-ASM:v2.2')
+	//modImplementation 'net.fabricmc.fabric-api:fabric-api:0.34.3+1.17'
+	include modApi('com.github.Chocohead:Fabric-ASM:v2.3')
 }
 
 sourceSets {
