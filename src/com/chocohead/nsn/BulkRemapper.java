@@ -25,6 +25,7 @@ import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
@@ -320,6 +321,20 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/util/Map": {
 						if ("entry".equals(min.name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(min.desc)) {
 							min.owner = "com/chocohead/nsn/ImmutableNonullEntry"; //A non-null and non-Serialisable Entry is a bit weird
+						}
+						break;
+					}
+
+					case "java/util/stream/Stream": {
+						if ("toList".equals(min.name) && "()Ljava/util/List;".equals(min.desc)) {
+							min.name = "toArray";
+							min.desc = "()[Ljava/lang/Object;";
+							it.add(new InsnNode(Opcodes.DUP));
+							it.add(new InsnNode(Opcodes.ARRAYLENGTH));
+							it.add(new LdcInsnNode(Type.getType("[Ljava/lang/Object;")));
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/Arrays", "copyOf", "([Ljava/lang/Object;ILjava/lang/Class;)[Ljava/lang/Object;", false));
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/Arrays", "asList", "([Ljava/lang/Object;)Ljava/util/List;", false));
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;", false));
 						}
 						break;
 					}
