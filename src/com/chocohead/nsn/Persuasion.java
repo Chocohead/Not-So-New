@@ -1,9 +1,14 @@
 package com.chocohead.nsn;
 
 import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.Collections;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
 
+import org.spongepowered.asm.launch.MixinBootstrap;
+import org.spongepowered.asm.launch.platform.container.IContainerHandle;
+import org.spongepowered.asm.util.Constants.ManifestAttributes;
 import org.spongepowered.asm.util.JavaVersion;
 
 import net.fabricmc.loader.api.LanguageAdapter;
@@ -16,6 +21,24 @@ public class Persuasion implements LanguageAdapter {
 	public Persuasion() {
 		real = JavaVersion.current();
 		set(16);
+
+		MixinBootstrap.getPlatform().addContainer(new IContainerHandle() {			
+			@Override
+			public Collection<IContainerHandle> getNestedContainers() {
+				return Collections.emptySet();
+			}
+
+			@Override
+			public String getAttribute(String name) {
+				switch (name) {
+				case ManifestAttributes.MIXINCONFIGS:
+					return "nsn.mixins.json";
+
+				default:
+					return null;
+				}
+			}
+		});
 	}
 
 	static void flip() {

@@ -21,17 +21,14 @@
 	"entrypoints": {
 		"preLaunch": [
 			"com.chocohead.nsn.LoadGuard"
-		],
-		"mm:early_risers": [
-			"com.chocohead.nsn.Nester"
 		]
 	},
 	"languageAdapters": {
 		"nsn:entrypoint": "com.chocohead.nsn.Persuasion"
 	},
 	"depends": {
-		"fabricloader": ">=0.8.0",
-		"minecraft": [">=1.17-alpha.21.19.a"],
+		"fabricloader": [">=0.8.0 <0.11.4"],
+		"minecraft": ">=1.17-alpha.21.19.a",
 		"mm": ">=2.0"
 	}
 }

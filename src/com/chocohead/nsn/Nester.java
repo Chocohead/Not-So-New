@@ -24,7 +24,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import com.google.common.base.Verify;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.io.MoreFiles;
@@ -50,28 +49,8 @@ import net.fabricmc.loader.api.ModContainer;
 
 import com.chocohead.mm.api.ClassTinkerers;
 
-public class Nester implements Runnable {
-	private static final String MIXIN_PACKAGE = "com.chocohead.nsn.mixins.";
-	private static boolean hasRun;
-
-	@Override
-	public void run() {
-		if (!hasRun) {
-			hasRun = true;
-			onLoad(MIXIN_PACKAGE);
-		}
-	}
-
+public class Nester {
 	static void run(String mixinPackage) {
-		Verify.verify(MIXIN_PACKAGE.equals(mixinPackage), "Unexpected Mixin package '%s', expected '%s'", mixinPackage, MIXIN_PACKAGE);
-
-		if (!hasRun) {
-			hasRun = true;
-			onLoad(MIXIN_PACKAGE);
-		}
-	}
-
-	private static void onLoad(String mixinPackage) {
 		StickyTape.tape();
 
 		Set<String> toTransform = new HashSet<>(4096);
