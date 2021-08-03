@@ -284,20 +284,18 @@ public class Nester {
 			tasks.add(() -> {
 				ClassTinkerers.addTransformation(member.name, node -> {
 					if (!neededMethods.isEmpty()) {
-						Map<String, MethodNode> methodNodes = node.methods.stream().collect(Collectors.toMap(method -> method.name.concat(method.desc), Function.identity()));
-
-						for (String method : neededMethods) {
-							MethodNode m = methodNodes.get(method);
-							m.access = (m.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
+						for (MethodNode method : node.methods) {
+							if (neededMethods.contains(method.name.concat(method.desc))) {
+								method.access = (method.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
+							}
 						}
 					}
 
 					if (!neededFields.isEmpty()) {
-						Map<String, FieldNode> fieldNodes = node.fields.stream().collect(Collectors.toMap(field -> field.name + '#' + field.desc, Function.identity()));
-
-						for (String field : neededFields) {
-							FieldNode f = fieldNodes.get(field);
-							f.access = (f.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
+						for (FieldNode field : node.fields) {
+							if (neededFields.contains(field.name + '#' + field.desc)) {
+								field.access = (field.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
+							}
 						}
 					}							
 				});
