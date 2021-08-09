@@ -39,6 +39,7 @@ public class Persuasion implements LanguageAdapter {
 				}
 			}
 		});
+		SpecialService.link(); //What could ever go wrong
 	}
 
 	static void flip() {

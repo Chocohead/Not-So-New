@@ -29,6 +29,8 @@ public class LoadGuard implements PreLaunchEntrypoint {
 	@Override
 	@SuppressWarnings("unchecked") //Maybe a little
 	public void onPreLaunch() {
+		SpecialService.unlink();
+
 		Map<String, IMixinInfo> accessors;
 		try {
 			MixinProcessor processor = StickyTape.grabTransformer(MixinProcessor.class, "processor");
