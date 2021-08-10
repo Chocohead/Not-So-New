@@ -61,7 +61,7 @@ public class Recordy {
 
 		case Type.ARRAY:
 		case Type.OBJECT:
-			owner = "java/lang/Objects";
+			owner = "java/util/Objects";
 			break;
 
 		case Type.VOID:
@@ -162,7 +162,7 @@ public class Recordy {
 
 		case Type.ARRAY:
 		case Type.OBJECT:
-			owner = "java/lang/Objects";
+			owner = "java/util/Objects";
 			desc = "(Ljava/lang/Object;)I";
 			break;
 

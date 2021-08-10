@@ -339,6 +339,39 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/Set": {
+						switch (min.name.concat(min.desc)) {
+						case "of()Ljava/util/Set;":
+							min.owner = "java/util/Collections";
+							min.name = "emptySet";
+							break;
+
+						case "of(Ljava/lang/Object;)Ljava/util/Set;":
+							min.owner = "java/util/Collections";
+							min.name = "singleton";
+							break;
+
+						case "of([Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
+							min.owner = "com/chocohead/nsn/Sets";
+							break;
+
+						case "copyOf(Ljava/util/Collection;)Ljava/util/Set;":
+							min.owner = "com/google/common/collect/ImmutableSet";
+							min.desc = "(Ljava/util/Collection;)Lcom/google/common/collect/ImmutableSet;";
+							break;
+						}
+						break;
+					}
+
 					case "java/lang/String": {
 						if ("repeat".equals(min.name) && "(I)Ljava/lang/String;".equals(min.desc)) {
 							min.setOpcode(Opcodes.INVOKESTATIC);
@@ -362,8 +395,43 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/Map": {
-						if ("entry".equals(min.name) && "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;".equals(min.desc)) {
-							min.owner = "com/chocohead/nsn/ImmutableNonullEntry"; //A non-null and non-Serialisable Entry is a bit weird
+						switch (min.name.concat(min.desc)) {
+						case "of()Ljava/util/Map;":
+							min.owner = "java/util/Collections";
+							min.name = "emptyMap";
+							break;
+
+						case "of(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+							min.owner = "java/util/Collections";
+							min.name = "singletonMap";
+							break;
+
+						case "copyOf(Ljava/util/Map;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+							min.owner = "com/google/common/collect/ImmutableMap";
+							min.desc = min.desc.substring(0, min.desc.length() - 14).concat("com/google/common/collect/ImmutableMap;");
+							break;
+
+						case "entry(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;": //A non-null and non-Serialisable Entry is a bit weird
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
+							min.owner = "com/chocohead/nsn/Maps";
+							break;
+
+						case "ofEntries([Ljava/util/Map$Entry;)Ljava/util/Map;":
+							it.previous();
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/Arrays", "asList", "([Ljava/lang/Object;)Ljava/util/List;", false));
+							it.next();
+							min.owner = "com/google/common/collect/ImmutableMap";
+							min.name = "copyOf";
+							min.desc = "(Ljava/lang/Iterable;)Lcom/google/common/collect/ImmutableMap;";
+							break;
 						}
 						break;
 					}
