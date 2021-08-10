@@ -43,6 +43,8 @@ public class SpecialService {
 								if (version > Opcodes.V1_8) {
 									ClassNode node = new ClassNode();
 									new ClassReader(basicClass).accept(node, 0);
+
+									BulkRemapper.earlyLoaded.add(node.name);
 									BulkRemapper.transform(node);
 
 									ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
@@ -71,7 +73,7 @@ public class SpecialService {
 
 					for (String name : BulkRemapper.toTransform.getTargets()) {
 						//System.out.println("About to load " + name);
-						try (InputStream in = SpecialService.class.getResourceAsStream('/' + name.replace('.', '/') + ".class")) {
+						try (InputStream in = SpecialService.class.getResourceAsStream('/' + name + ".class")) {
 							if (in != null) {
 								ClassReader reader = new ClassReader(in);
 
@@ -83,7 +85,7 @@ public class SpecialService {
 
 									ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 									node.accept(writer);
-									patches.put(name, writer.toByteArray());
+									patches.put(name.replace('/', '.'), writer.toByteArray());
 								}// else System.out.println("\tIt's fine");
 							}// else System.out.println("\tDidn't find it...");
 						} catch (IOException e) {
