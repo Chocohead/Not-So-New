@@ -2,7 +2,9 @@ package com.chocohead.nsn;
 
 import java.io.InputStream;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
 
@@ -21,6 +23,7 @@ import net.fabricmc.loader.api.FabricLoader;
 
 public class SpecialService {
 	private static Stage stage;
+	static Set<String> existingEntrypoints = new HashSet<>();
 
 	private enum Stage {
 		CROUCH {
@@ -71,8 +74,12 @@ public class SpecialService {
 
 					@SuppressWarnings("unchecked") //Some would say that it is
 					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
+					existingEntrypoints.addAll(patches.keySet());
 
 					for (String name : BulkRemapper.toTransform.getTargets()) {
+						String binaryName = name.replace('/', '.');
+						if (existingEntrypoints.contains(binaryName)) continue; //Avoid replacing the real patches, shouldn't be loading those types before Mixin
+
 						//System.out.println("About to load " + name);
 						try (InputStream in = SpecialService.class.getResourceAsStream('/' + name + ".class")) {
 							if (in != null) {
@@ -88,7 +95,7 @@ public class SpecialService {
 
 									ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 									node.accept(writer);
-									patches.put(name.replace('/', '.'), writer.toByteArray());
+									patches.put(binaryName, writer.toByteArray());
 								}// else System.out.println("\tIt's fine");
 							}// else System.out.println("\tDidn't find it...");
 						} catch (IOException e) {
@@ -107,9 +114,12 @@ public class SpecialService {
 					Map<?, ?> patches = (Map<?, ?>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
 
 					for (String name : BulkRemapper.toTransform.getTargets()) {
-						patches.remove(name);
+						name = name.replace('/', '.');
+						if (!existingEntrypoints.contains(name)) patches.remove(name);
 					}
-					BulkRemapper.toTransform = null; //Don't need to remember these anymore
+
+					existingEntrypoints = null; //Don't need to remember these anymore
+					BulkRemapper.toTransform = null;
 				} catch (ReflectiveOperationException | ClassCastException e) {
 					throw new RuntimeException("Failed to clear extra transformers", e);
 				}
