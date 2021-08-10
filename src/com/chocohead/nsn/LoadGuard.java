@@ -1,6 +1,7 @@
 package com.chocohead.nsn;
 
 import java.lang.reflect.Modifier;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,7 +30,7 @@ public class LoadGuard implements PreLaunchEntrypoint {
 	@Override
 	@SuppressWarnings("unchecked") //Maybe a little
 	public void onPreLaunch() {
-		SpecialService.unlink();
+		Set<String> trouble = new HashSet<>();
 
 		Map<String, IMixinInfo> accessors;
 		try {
@@ -54,6 +55,14 @@ public class LoadGuard implements PreLaunchEntrypoint {
 	            }
 			}
 
+			if (accessor.getTargetClasses().size() > 1) {
+				for (String target : accessor.getTargetClasses()) {
+					BulkRemapper.HUMBLE_INTERFACES.remove(target.replace('.', '/'), node.name);
+				}
+				trouble.add(accessor.getClassName());
+				continue;
+			}
+
 			try {
 				Object state = FieldUtils.readDeclaredField(accessor, "state", true);
 				ClassNode realNode = (ClassNode) FieldUtils.readDeclaredField(state, "classNode", true);
@@ -67,6 +76,8 @@ public class LoadGuard implements PreLaunchEntrypoint {
 				break on;
 			}
 		}
+
+		SpecialService.unlink(trouble);
 	}
 
 	private static MethodVisitor attachMethod(ClassVisitor visitor) {

@@ -24,6 +24,7 @@ import net.fabricmc.loader.api.FabricLoader;
 public class SpecialService {
 	private static Stage stage;
 	static Set<String> existingEntrypoints = new HashSet<>();
+	static Set<String> extraTransforms;
 
 	private enum Stage {
 		CROUCH {
@@ -111,14 +112,33 @@ public class SpecialService {
 			@Override
 			void onSwitch() {
 				try {
-					Map<?, ?> patches = (Map<?, ?>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
+					@SuppressWarnings("unchecked") //Some would say that it is
+					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
 
 					for (String name : BulkRemapper.toTransform.getTargets()) {
 						name = name.replace('/', '.');
 						if (!existingEntrypoints.contains(name)) patches.remove(name);
 					}
 
+					for (String name : extraTransforms) {
+						try (InputStream in = SpecialService.class.getResourceAsStream('/' + name.replace('.', '/') + ".class")) {
+							ClassNode node = new ClassNode();
+							new ClassReader(in).accept(node, 0);
+							assert node.version > Opcodes.V1_8;
+
+							BulkRemapper.transform(node);
+							BulkRemapper.toTransform.applyNestTransform(node);
+
+							ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+							node.accept(writer);
+							patches.put(name, writer.toByteArray());
+						} catch (IOException e) {
+							throw new RuntimeException("Failed to add extra transform for " + name, e);
+						}
+					}
+
 					existingEntrypoints = null; //Don't need to remember these anymore
+					extraTransforms = null;
 					BulkRemapper.toTransform = null;
 				} catch (ReflectiveOperationException | ClassCastException e) {
 					throw new RuntimeException("Failed to clear extra transformers", e);
@@ -150,7 +170,8 @@ public class SpecialService {
 		}
 	}
 
-	static void unlink() {
+	static void unlink(Set<String> trouble) {
+		extraTransforms = trouble;
 		stage = Stage.SET;
 		stage.onSwitch();
 	}
