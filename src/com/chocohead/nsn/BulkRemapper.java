@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.google.common.base.Verify;
@@ -52,7 +53,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		Persuasion.flip(); //We've done the persuading now
 		StickyTape.tape();
 
-		toTransform.calculateNests();
 		for (Entry<String, Supplier<String>> entry : toTransform.getInterfaceTargets().entries()) {
 			HUMBLE_INTERFACES.put(entry.getValue().get(), entry.getKey());
 		}
@@ -60,6 +60,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		mixinPackage = mixinPackage.replace('.', '/');
 		generateMixin(mixinPackage.concat("SuperMixin"), toTransform.getTargets());
 		generateMixin(mixinPackage.concat("InterfaceMixin"), HUMBLE_INTERFACES.keySet());
+
+		for (Entry<String, Consumer<ClassNode>> entry : toTransform.getNestTransforms().entrySet()) {
+			ClassTinkerers.addTransformation(entry.getKey(), entry.getValue());
+		}
 		earlyLoaded = null;
 
 		try {

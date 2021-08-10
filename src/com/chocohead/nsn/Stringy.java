@@ -123,6 +123,7 @@ public class Stringy {
 				visitor.aconst("null");
 				visitor.store(arg, type);
 				visitor.mark(skip);
+				visitor.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
 			}
 		}
 

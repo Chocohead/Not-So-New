@@ -12,15 +12,14 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -40,19 +39,19 @@ import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 
-import com.chocohead.mm.api.ClassTinkerers;
-
 public class Nester {
 	public static class ScanResult {
 		final Set<String> toTransform = new ObjectOpenHashSet<>(4096);
 		final ListMultimap<String, Supplier<String>> interfaceTargets = ArrayListMultimap.create(64, 4);
-		final SetMultimap<String, ClassReader> nests = Multimaps.newSetMultimap(new HashMap<>(128), ReferenceOpenHashSet::new);
+		SetMultimap<String, ClassReader> nests = Multimaps.newSetMultimap(new HashMap<>(128), ReferenceOpenHashSet::new);
+		CompletableFuture<Map<String, Consumer<ClassNode>>> nestTransforms;
 
 		ScanResult() {
 		}
@@ -65,23 +64,45 @@ public class Nester {
 			return Multimaps.unmodifiableListMultimap(interfaceTargets);
 		}
 
-		public void calculateNests() {
+		void calculateNests() {
 			try {
 				resolveNestSystem(Collections.singleton(new ClassReader(Object.class.getName())));
 			} catch (IOException e) {
 				//Only warming up for class loading
 			}
-			List<CompletableFuture<List<Runnable>>> tasks = new ArrayList<>(nests.asMap().size());
+			@SuppressWarnings("unchecked") //We'll be careful
+			CompletableFuture<Map<String, Consumer<ClassNode>>>[] tasks = new CompletableFuture[nests.asMap().size()];
 
+			int i = 0;
 			for (Collection<ClassReader> system : nests.asMap().values()) {
 				//System.out.println(system.stream().map(ClassReader::getClassName).collect(Collectors.joining(", ", "Analysing: [", "]")));
-				tasks.add(CompletableFuture.supplyAsync(() -> resolveNestSystem(system)));
+				tasks[i++] = CompletableFuture.supplyAsync(() -> resolveNestSystem(system));
 			}
 
-			for (CompletableFuture<List<Runnable>> future : tasks) {
-				for (Runnable task : future.join()) {
-					task.run(); //Avoid causing CMEs trying to transform multiple classes at the same time
+			nests = null;
+			nestTransforms = CompletableFuture.allOf(tasks).thenApply(empty -> {
+				Map<String, Consumer<ClassNode>> out = new HashMap<>();
+
+				for (CompletableFuture<Map<String, Consumer<ClassNode>>> task : tasks) {
+					out.putAll(task.join());
 				}
+
+				return out;
+			});
+		}
+
+		public Map<String, Consumer<ClassNode>> getNestTransforms() {
+			return nestTransforms.join();
+		}
+
+		public boolean applyNestTransform(ClassNode node) {
+			Consumer<ClassNode> out = getNestTransforms().get(node.name);
+
+			if (out != null) {
+				out.accept(node);
+				return true;
+			} else {
+				return false;
 			}
 		}
 	}
@@ -116,6 +137,7 @@ public class Nester {
 			}
 		}
 
+		out.calculateNests();
 		return out;
 	}
 
@@ -192,7 +214,7 @@ public class Nester {
 		}
 	}
 
-	private static List<Runnable> resolveNestSystem(Collection<ClassReader> system) {
+	private static Map<String, Consumer<ClassNode>> resolveNestSystem(Collection<ClassReader> system) {
 		class Member {
 			public final String name;
 			public final Set<String> methods = new HashSet<>();
@@ -265,7 +287,7 @@ public class Nester {
 			}, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
 		}
 
-		List<Runnable> tasks = new ArrayList<>(ownerToMembers.size());
+		Map<String, Consumer<ClassNode>> tasks = new HashMap<>(ownerToMembers.size());
 		for (Member member : ownerToMembers.values()) {
 			Set<String> neededMethods = member.usedMethods;
 			neededMethods.retainAll(member.methods);
@@ -273,24 +295,22 @@ public class Nester {
 			neededFields.retainAll(member.fields);
 			if (neededFields.isEmpty() && neededMethods.isEmpty()) continue;
 
-			tasks.add(() -> {
-				ClassTinkerers.addTransformation(member.name, node -> {
-					if (!neededMethods.isEmpty()) {
-						for (MethodNode method : node.methods) {
-							if (neededMethods.contains(method.name.concat(method.desc))) {
-								method.access = (method.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
-							}
+			tasks.put(member.name, node -> {
+				if (!neededMethods.isEmpty()) {
+					for (MethodNode method : node.methods) {
+						if (neededMethods.contains(method.name.concat(method.desc))) {
+							method.access = (method.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
 						}
 					}
+				}
 
-					if (!neededFields.isEmpty()) {
-						for (FieldNode field : node.fields) {
-							if (neededFields.contains(field.name + '#' + field.desc)) {
-								field.access = (field.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
-							}
+				if (!neededFields.isEmpty()) {
+					for (FieldNode field : node.fields) {
+						if (neededFields.contains(field.name + '#' + field.desc)) {
+							field.access = (field.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PUBLIC;
 						}
-					}							
-				});
+					}
+				}
 			});
 		}
 

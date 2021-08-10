@@ -46,6 +46,7 @@ public class SpecialService {
 
 									BulkRemapper.earlyLoaded.add(node.name);
 									BulkRemapper.transform(node);
+									BulkRemapper.toTransform.applyNestTransform(node);
 
 									ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 									node.accept(writer);
@@ -81,7 +82,9 @@ public class SpecialService {
 									//System.out.println("\tIt's too new!");
 									ClassNode node = new ClassNode();
 									reader.accept(node, 0);
+
 									BulkRemapper.transform(node);
+									BulkRemapper.toTransform.applyNestTransform(node);
 
 									ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 									node.accept(writer);
