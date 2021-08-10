@@ -1,5 +1,7 @@
 package com.chocohead.nsn;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -30,8 +32,9 @@ import org.spongepowered.asm.mixin.transformer.Config;
 
 public class MixinChecker extends ClassVisitor {
 	private static final String TARGET = Type.getDescriptor(Mixin.class);
-	private final Map<IMixinConfig, IReferenceMapper> remappers = new IdentityHashMap<>();
 	private final AnnotationVisitor mixinVisitor = new AnnotationVisitor(api) {
+		private final Map<IMixinConfig, IReferenceMapper> remappers = new IdentityHashMap<>();
+
 		@Override
 		public AnnotationVisitor visitArray(String name) {
 			return "value".equals(name) || "targets".equals(name) ? this : null;
@@ -41,14 +44,15 @@ public class MixinChecker extends ClassVisitor {
 		public void visit(String name, Object value) {
 			if (name == null) {
 				if (value instanceof String) {
+					String mixinName = MixinChecker.this.name;
 					targets.add(() -> {
-						String binaryName = MixinChecker.this.name.replace('/', '.');
+						String binaryName = mixinName.replace('/', '.');
 						String target = (String) value;
 
 						List<IMixinConfig> configs = Mixins.getConfigs().stream().map(Config::getConfig)
 																			.filter(config -> binaryName.startsWith(config.getMixinPackage())).collect(Collectors.toList());
 						if (configs.isEmpty()) {
-							throw new UnsupportedOperationException("Unable to find Mixin config for " + MixinChecker.this.name + " targetting " + target.replace('.', '/'));
+							throw new UnsupportedOperationException("Unable to find Mixin config for " + mixinName + " targetting " + target.replace('.', '/'));
 						}
 
 						for (IMixinConfig config : configs) {
@@ -70,9 +74,9 @@ public class MixinChecker extends ClassVisitor {
 
 							String remap;
 							if (remapper instanceof IClassReferenceMapper) {
-					            remap = ((IClassReferenceMapper) remapper).remapClassName(MixinChecker.this.name, target);
+					            remap = ((IClassReferenceMapper) remapper).remapClassName(mixinName, target);
 					        } else {
-					            remap = remapper.remap(MixinChecker.this.name, target);
+					            remap = remapper.remap(mixinName, target);
 					        }
 
 							//System.out.println(config.getName() + " remapped " + target + " to " + remap + " for " + MixinChecker.this.name);
@@ -84,13 +88,13 @@ public class MixinChecker extends ClassVisitor {
 				} else if (value instanceof Type) {
 					targets.add(() -> ((Type) value).getInternalName());
 				} else {
-					System.out.println("Unexpected array type: " + value);
+					System.out.println("Unexpected array type: " + value + " in " + MixinChecker.this.name);
 				}
 			}
 		}
 	};
 	private String name;
-	private final Set<Supplier<String>> targets = new ObjectOpenHashSet<>();
+	private final List<Supplier<String>> targets = new ArrayList<>();
 	private boolean isMixin;
 	private String nestHost;
 	private final Set<String> nestMates = new ObjectOpenHashSet<>();
@@ -130,6 +134,10 @@ public class MixinChecker extends ClassVisitor {
 
 	public Set<String> getTargets() {
 		return Collections.unmodifiableSet(targets.stream().map(Supplier::get).collect(Collectors.toSet()));
+	}
+
+	Collection<Supplier<String>> getLazyTargets() {
+		return Collections.unmodifiableCollection(targets);
 	}
 
 	public boolean inNestedSystem() {

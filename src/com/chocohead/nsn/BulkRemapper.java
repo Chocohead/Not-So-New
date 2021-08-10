@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import com.google.common.base.Verify;
 import com.google.common.collect.HashMultimap;
@@ -16,6 +18,8 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
+import org.objectweb.asm.AnnotationVisitor;
+import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -32,15 +36,50 @@ import org.objectweb.asm.tree.TypeInsnNode;
 
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+import org.spongepowered.asm.mixin.transformer.ext.Extensions;
+
+import com.chocohead.mm.api.ClassTinkerers;
+import com.chocohead.nsn.Nester.ScanResult;
 
 public class BulkRemapper implements IMixinConfigPlugin {
 	static final SetMultimap<String, String> HUMBLE_INTERFACES = HashMultimap.create(64, 4);
+	static ScanResult toTransform = Nester.run();
 
 	@Override
 	public void onLoad(String mixinPackage) {
 		Persuasion.flip(); //We've done the persuading now
+		StickyTape.tape();
 
-		Nester.run(mixinPackage);
+		toTransform.calculateNests();
+		for (Entry<String, Supplier<String>> entry : toTransform.getInterfaceTargets().entries()) {
+			HUMBLE_INTERFACES.put(entry.getValue().get(), entry.getKey());
+		}
+
+		mixinPackage = mixinPackage.replace('.', '/');
+		generateMixin(mixinPackage.concat("SuperMixin"), toTransform.getTargets());
+		generateMixin(mixinPackage.concat("InterfaceMixin"), HUMBLE_INTERFACES.keySet());
+
+		try {
+			Extensions extensions = StickyTape.grabTransformer(Extensions.class, "extensions");
+
+			extensions.add(new Extension(mixinPackage));
+		} catch (ReflectiveOperationException | ClassCastException e) {
+			throw new IllegalStateException("Running with a transformer that doesn't have extensions?", e);
+		}
+	}
+
+	private static void generateMixin(String name, Iterable<String> targets) {
+		ClassWriter cw = new ClassWriter(0);
+		cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_INTERFACE, name, null, "java/lang/Object", null);
+
+		AnnotationVisitor mixinAnnotation = cw.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", false);
+		AnnotationVisitor targetAnnotation = mixinAnnotation.visitArray("value");
+		for (String target : targets) targetAnnotation.visit(null, Type.getType('L' + target + ';'));
+		targetAnnotation.visitEnd();
+		mixinAnnotation.visitEnd();
+
+		cw.visitEnd();
+		ClassTinkerers.define(name, cw.toByteArray());
 	}
 
 	@Override

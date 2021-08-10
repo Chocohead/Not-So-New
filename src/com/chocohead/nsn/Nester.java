@@ -22,27 +22,26 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.io.MoreFiles;
 
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 
-import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
-
-import org.spongepowered.asm.mixin.transformer.ext.Extensions;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
@@ -50,39 +49,23 @@ import net.fabricmc.loader.api.ModContainer;
 import com.chocohead.mm.api.ClassTinkerers;
 
 public class Nester {
-	static void run(String mixinPackage) {
-		StickyTape.tape();
+	public static class ScanResult {
+		final Set<String> toTransform = new ObjectOpenHashSet<>(4096);
+		final ListMultimap<String, Supplier<String>> interfaceTargets = ArrayListMultimap.create(64, 4);
+		final SetMultimap<String, ClassReader> nests = Multimaps.newSetMultimap(new HashMap<>(128), ReferenceOpenHashSet::new);
 
-		Set<String> toTransform = new HashSet<>(4096);
-		SetMultimap<String, ClassReader> nests = Multimaps.newSetMultimap(new HashMap<>(128), ReferenceOpenHashSet::new);
-		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
-
-		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
-			String modID = mod.getMetadata().getId();
-
-			if (!"fabricloader".equals(modID) && !"java".equals(modID) && !"nsn".equals(modID)) {
-				if ("minecraft".equals(modID)) {
-					String block = FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_2248").replace('.', '/');
-
-					try (FileSystem fs = FileSystems.newFileSystem(BulkRemapper.class.getResource('/' + block + ".class").toURI(), Collections.emptyMap())) {
-						for (Path root : fs.getRootDirectories()) {
-							walkTree(buffer, root, toTransform, nests);
-						}
-					} catch (URISyntaxException | FileSystemAlreadyExistsException | IOException e) {
-						throw new RuntimeException("Failed to read Minecraft jar", e);
-					}
-				} else {
-					walkTree(buffer, mod.getRootPath(), toTransform, nests);
-				}
-			}
+		ScanResult() {
 		}
 
-		assert !toTransform.isEmpty();
-		mixinPackage = mixinPackage.replace('.', '/');
-		generateMixin(mixinPackage.concat("SuperMixin"), toTransform);
-		generateMixin(mixinPackage.concat("InterfaceMixin"), BulkRemapper.HUMBLE_INTERFACES.keySet());
+		public Set<String> getTargets() {
+			return Collections.unmodifiableSet(toTransform);
+		}
 
-		if (!nests.isEmpty()) {
+		public ListMultimap<String, Supplier<String>> getInterfaceTargets() {
+			return Multimaps.unmodifiableListMultimap(interfaceTargets);
+		}
+
+		public void calculateNests() {
 			try {
 				resolveNestSystem(Collections.singleton(new ClassReader(Object.class.getName())));
 			} catch (IOException e) {
@@ -91,7 +74,7 @@ public class Nester {
 			List<CompletableFuture<List<Runnable>>> tasks = new ArrayList<>(nests.asMap().size());
 
 			for (Collection<ClassReader> system : nests.asMap().values()) {
-				System.out.println(system.stream().map(ClassReader::getClassName).collect(Collectors.joining(", ", "Analysing: [", "]")));
+				//System.out.println(system.stream().map(ClassReader::getClassName).collect(Collectors.joining(", ", "Analysing: [", "]")));
 				tasks.add(CompletableFuture.supplyAsync(() -> resolveNestSystem(system)));
 			}
 
@@ -101,17 +84,42 @@ public class Nester {
 				}
 			}
 		}
-
-		try {
-			Extensions extensions = StickyTape.grabTransformer(Extensions.class, "extensions");
-
-			extensions.add(new Extension(mixinPackage));
-		} catch (ReflectiveOperationException | ClassCastException e) {
-			throw new IllegalStateException("Running with a transformer that doesn't have extensions?", e);
-		}
 	}
 
-	private static void walkTree(RecyclableDataInputStream buffer, Path jar, Set<String> toTransform, SetMultimap<String, ClassReader> nests) {
+	static ScanResult run() {
+		ScanResult out = new ScanResult();
+		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
+
+		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+			switch (mod.getMetadata().getId()) {
+			case "fabricloader":
+			case "java":
+			case "nsn":
+				break;
+
+			case "minecraft": {
+				String block = FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_2248").replace('.', '/');
+
+				try (FileSystem fs = FileSystems.newFileSystem(BulkRemapper.class.getResource('/' + block + ".class").toURI(), Collections.emptyMap())) {
+					for (Path root : fs.getRootDirectories()) {
+						walkTree(buffer, root, out);
+					}
+				} catch (URISyntaxException | FileSystemAlreadyExistsException | IOException e) {
+					throw new RuntimeException("Failed to read Minecraft jar", e);
+				}
+				break;
+			}
+
+			default:
+				walkTree(buffer, mod.getRootPath(), out);
+				break;
+			}
+		}
+
+		return out;
+	}
+
+	private static void walkTree(RecyclableDataInputStream buffer, Path jar, ScanResult result) {
 		try {
 			Files.walkFileTree(jar, new FileVisitor<Path>() {
 				private final MixinChecker checker = new MixinChecker();
@@ -143,15 +151,13 @@ public class Nester {
 								reader.accept(checker, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
 
 								if (!checker.isMixin()) {
-									toTransform.add(name);
+									result.toTransform.add(name);
 
 									if (checker.inNestedSystem()) {
-										nests.put(checker.isNestHost() ? name : checker.getNestHost(), reader);
+										result.nests.put(checker.isNestHost() ? name : checker.getNestHost(), reader);
 									}
 								} else if (Modifier.isInterface(reader.getAccess())) {
-									for (String target : checker.getTargets()) {
-										BulkRemapper.HUMBLE_INTERFACES.put(target, name);
-									}
+									result.interfaceTargets.putAll(name, checker.getLazyTargets());
 								}
 
 								checker.reset();
@@ -184,20 +190,6 @@ public class Nester {
 		} catch (IOException e) {//This can only be thrown from the file visitor doing so
 			throw new AssertionError("Unexpected exception", e);
 		}
-	}
-
-	private static void generateMixin(String name, Iterable<String> targets) {
-		ClassWriter cw = new ClassWriter(0);
-		cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_INTERFACE, name, null, "java/lang/Object", null);
-
-		AnnotationVisitor mixinAnnotation = cw.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", false);
-		AnnotationVisitor targetAnnotation = mixinAnnotation.visitArray("value");
-		for (String target : targets) targetAnnotation.visit(null, Type.getType('L' + target + ';'));
-		targetAnnotation.visitEnd();
-		mixinAnnotation.visitEnd();
-
-		cw.visitEnd();
-		ClassTinkerers.define(name, cw.toByteArray());
 	}
 
 	private static List<Runnable> resolveNestSystem(Collection<ClassReader> system) {

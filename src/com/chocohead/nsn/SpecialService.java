@@ -2,7 +2,6 @@ package com.chocohead.nsn;
 
 import java.io.InputStream;
 import java.io.IOException;
-import java.net.URL;
 import java.util.Map;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
@@ -14,7 +13,6 @@ import org.objectweb.asm.tree.ClassNode;
 
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.transformer.FabricMixinTransformerProxy;
-import org.spongepowered.asm.service.IClassProvider;
 import org.spongepowered.asm.service.IMixinService;
 import org.spongepowered.asm.service.MixinService;
 
@@ -61,97 +59,64 @@ public class SpecialService {
 					throw new RuntimeException("Failed to fake Mixin transformer", e);
 				}
 			}
-
-			@Override
-			void onLoad(String name) {
-			}
 		}, BIND {
-			private final Map<String, byte[]> patches = grabPatches();
-
-			@SuppressWarnings("unchecked")
-			private Map<String, byte[]> grabPatches() {
-				try {
-					return (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
-				} catch (ReflectiveOperationException | ClassCastException e) {
-					throw new RuntimeException("Failed to find entrypoint patches", e);
-				}
-			}
-
 			@Override
 			void onSwitch() {
 				try {
 					Object delegate = FieldUtils.readDeclaredField(SpecialService.class.getClassLoader(), "delegate", true);
-					FieldUtils.writeDeclaredField(delegate, "transformInitialized", false, true); 
+					FieldUtils.writeDeclaredField(delegate, "transformInitialized", false, true);
+
+					@SuppressWarnings("unchecked") //Some would say that it is
+					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
+
+					for (String name : BulkRemapper.toTransform.getTargets()) {
+						//System.out.println("About to load " + name);
+						try (InputStream in = SpecialService.class.getResourceAsStream('/' + name.replace('.', '/') + ".class")) {
+							if (in != null) {
+								ClassReader reader = new ClassReader(in);
+
+								if (reader.readShort(6) > Opcodes.V1_8) {
+									//System.out.println("\tIt's too new!");
+									ClassNode node = new ClassNode();
+									reader.accept(node, 0);
+									BulkRemapper.transform(node);
+
+									ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+									node.accept(writer);
+									patches.put(name, writer.toByteArray());
+								}// else System.out.println("\tIt's fine");
+							}// else System.out.println("\tDidn't find it...");
+						} catch (IOException e) {
+							//Class might not exist?
+							//System.err.println("\tCrashed trying to find it?");
+						}
+					}
 				} catch (ReflectiveOperationException | ClassCastException e) {
 					throw new RuntimeException("Failed to unfake Mixin transformer", e);
-				}
-			}
-
-			@Override
-			void onLoad(String name) {
-				//System.out.println("About to load " + name);
-				try (InputStream in = SpecialService.class.getResourceAsStream('/' + name.replace('.', '/') + ".class")) {
-					if (in != null) {
-						ClassReader reader = new ClassReader(in);
-
-						if (reader.readShort(6) > Opcodes.V1_8) {
-							//System.out.println("\tIt's too new!");
-							ClassNode node = new ClassNode();
-							reader.accept(node, 0);
-							BulkRemapper.transform(node);
-
-							ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-							node.accept(writer);
-							patches.put(name, writer.toByteArray());
-						}// else System.out.println("\tIt's fine");
-					}// else System.out.println("\tDidn't find it...");
-				} catch (IOException e) {
-					//Class might not exist?
-					//System.err.println("\tCrashed trying to find it?");
 				}
 			}
 		}, SET {
 			@Override
 			void onSwitch() {
-				//Could undo the Mixin service changes?
-			}
+				try {
+					Map<?, ?> patches = (Map<?, ?>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
 
-			@Override
-			void onLoad(String name) {
+					for (String name : BulkRemapper.toTransform.getTargets()) {
+						patches.remove(name);
+					}
+					BulkRemapper.toTransform = null; //Don't need to remember these anymore
+				} catch (ReflectiveOperationException | ClassCastException e) {
+					throw new RuntimeException("Failed to clear extra transformers", e);
+				}
+
+				//Could undo the Mixin service changes?
 			}
 		};
 
 		abstract void onSwitch();
-
-		abstract void onLoad(String name);
 	}
 
 	static void link() {
-		IClassProvider replacement = new IClassProvider() {
-			private final IClassProvider existing = MixinService.getService().getClassProvider();
-
-			@Override
-			@Deprecated
-			public URL[] getClassPath() {
-				return existing.getClassPath();
-			}
-
-			@Override
-			public Class<?> findClass(String name) throws ClassNotFoundException {
-				return findAgentClass(name, true);
-			}
-
-			@Override
-			public Class<?> findClass(String name, boolean initialize) throws ClassNotFoundException {
-				stage.onLoad(name);
-				return existing.findClass(name, initialize);
-			}
-
-			@Override
-			public Class<?> findAgentClass(String name, boolean initialize) throws ClassNotFoundException {
-				return existing.findAgentClass(name, initialize);
-			}
-		};
 		IMixinService service = ForwardingFactory.of(IMixinService.class, MixinService.getService()).handling("init", () -> {
 			if (stage == null) {
 				stage = Stage.CROUCH;
@@ -162,7 +127,7 @@ public class SpecialService {
 				stage = Stage.BIND;
 				stage.onSwitch();
 			}
-		}).handling("getClassProvider", IClassProvider.class, () -> replacement).make();
+		}).make();
 
 		try {
 			MixinService instance = (MixinService) FieldUtils.readDeclaredStaticField(MixinService.class, "instance", true);
