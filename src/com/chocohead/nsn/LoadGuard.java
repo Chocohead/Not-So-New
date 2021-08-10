@@ -44,6 +44,7 @@ public class LoadGuard implements PreLaunchEntrypoint {
 		on: for (IMixinInfo accessor : accessors.values()) {
 			if ("nsn.mixins.json".equals(accessor.getConfig().getName()) || "mixins.mm.json".equals(accessor.getConfig().getName())) continue;
 			ClassNode node = accessor.getClassNode(0);
+			if (node.version <= Opcodes.V1_8) continue; //Nothing needs to be done
 
 			for (MethodNode method : node.methods) {
 				if (Modifier.isStatic(method.access) && (Annotations.getVisible(method, Accessor.class) != null || Annotations.getVisible(method, Invoker.class) != null)) {

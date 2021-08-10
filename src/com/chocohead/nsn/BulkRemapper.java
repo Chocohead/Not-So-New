@@ -3,7 +3,6 @@ package com.chocohead.nsn;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map.Entry;
@@ -45,7 +44,6 @@ import com.chocohead.nsn.Nester.ScanResult;
 
 public class BulkRemapper implements IMixinConfigPlugin {
 	static final SetMultimap<String, String> HUMBLE_INTERFACES = HashMultimap.create(64, 4);
-	static Set<String> earlyLoaded = new HashSet<>();
 	static ScanResult toTransform = Nester.run();
 
 	@Override
@@ -64,7 +62,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		for (Entry<String, Consumer<ClassNode>> entry : toTransform.getNestTransforms().entrySet()) {
 			ClassTinkerers.addTransformation(entry.getKey(), entry.getValue());
 		}
-		earlyLoaded = null;
 
 		try {
 			Extensions extensions = StickyTape.grabTransformer(Extensions.class, "extensions");
@@ -81,7 +78,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 		AnnotationVisitor mixinAnnotation = cw.visitAnnotation("Lorg/spongepowered/asm/mixin/Mixin;", false);
 		AnnotationVisitor targetAnnotation = mixinAnnotation.visitArray("value");
-		for (String target : targets) if (!earlyLoaded.contains(target)) targetAnnotation.visit(null, Type.getObjectType(target));
+		for (String target : targets) targetAnnotation.visit(null, Type.getObjectType(target));
 		targetAnnotation.visitEnd();
 		mixinAnnotation.visitEnd();
 

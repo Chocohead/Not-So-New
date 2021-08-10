@@ -13,6 +13,7 @@ import org.objectweb.asm.tree.ClassNode;
 
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.transformer.FabricMixinTransformerProxy;
+import org.spongepowered.asm.service.IClassTracker;
 import org.spongepowered.asm.service.IMixinService;
 import org.spongepowered.asm.service.MixinService;
 
@@ -44,7 +45,6 @@ public class SpecialService {
 									ClassNode node = new ClassNode();
 									new ClassReader(basicClass).accept(node, 0);
 
-									BulkRemapper.earlyLoaded.add(node.name);
 									BulkRemapper.transform(node);
 									BulkRemapper.toTransform.applyNestTransform(node);
 
@@ -113,8 +113,6 @@ public class SpecialService {
 				} catch (ReflectiveOperationException | ClassCastException e) {
 					throw new RuntimeException("Failed to clear extra transformers", e);
 				}
-
-				//Could undo the Mixin service changes?
 			}
 		};
 
@@ -132,7 +130,7 @@ public class SpecialService {
 				stage = Stage.BIND;
 				stage.onSwitch();
 			}
-		}).make();
+		}).handling("getClassTracker", IClassTracker.class, () -> null).make();
 
 		try {
 			MixinService instance = (MixinService) FieldUtils.readDeclaredStaticField(MixinService.class, "instance", true);
