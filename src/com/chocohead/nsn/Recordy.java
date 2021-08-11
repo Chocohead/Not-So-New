@@ -46,7 +46,7 @@ public class Recordy {
 	private static void equals(InstructionAdapter method, Handle field) {
 		Type type = Type.getType(field.getDesc());
 
-		String owner;
+		String owner, desc;
 		switch (type.getSort()) {
 		case Type.BOOLEAN:
 		case Type.BYTE:
@@ -57,20 +57,22 @@ public class Recordy {
 		case Type.FLOAT:
 		case Type.DOUBLE:
 			owner = "com/chocohead/nsn/Recordy";
+			desc = '(' + type.getDescriptor() + type.getDescriptor() + ")Z";
 			break;
 
 		case Type.ARRAY:
 		case Type.OBJECT:
 			owner = "java/util/Objects";
+			desc = "(Ljava/lang/Object;Ljava/lang/Object;)Z";
 			break;
 
 		case Type.VOID:
 		case Type.METHOD:
 		default:
-			throw new IllegalArgumentException("Unexpected field type: " + field.getDesc() + " (sort " + Type.getType(field.getDesc()).getSort() + ')');
+			throw new IllegalArgumentException("Unexpected field type: " + field.getDesc() + " (sort " + type.getSort() + ')');
 		}
 
-		method.invokestatic(owner, "equals", '(' + type.getDescriptor() + type.getDescriptor() + ")Z", false);
+		method.invokestatic(owner, "equals", desc, false);
 	}
 
 	public static MethodNode makeEquals(String type, Handle... fields) {

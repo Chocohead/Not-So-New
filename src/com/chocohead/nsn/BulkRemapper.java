@@ -491,6 +491,21 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 						break;
 					}
+
+					case "java/util/regex/Matcher": {
+						switch (min.name.concat(min.desc)) {
+						case "appendReplacement(Ljava/lang/StringBuilder;Ljava/lang/String;)Ljava/util/regex/Matcher;":
+						case "appendTail(Ljava/lang/StringBuilder;)Ljava/lang/StringBuilder;":
+						case "replaceAll(Ljava/util/function/Function;)Ljava/lang/String;":
+						case "results()Ljava/util/stream/Stream;":
+						case "replaceFirst(Ljava/util/function/Function;)Ljava/lang/String;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Matchy";
+							min.desc = "(Ljava/util/regex/Matcher;".concat(min.desc.substring(1));
+							break;
+						}
+						break;
+					}
 					}
 					break;
 				}
