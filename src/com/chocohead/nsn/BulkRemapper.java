@@ -127,9 +127,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			node.access &= ~Opcodes.ACC_RECORD;
 			node.superName = "java/lang/Object"; //Record only defines some abstract methods
 		}
+		boolean isInterface = Modifier.isInterface(node.access);
 
 		Object2IntMap<String> nameToAccess;
-		if (Modifier.isInterface(node.access)) {
+		if (isInterface) {
 			nameToAccess = new Object2IntOpenHashMap<>();
 
 			for (MethodNode method : node.methods) {
@@ -156,7 +157,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "makeConcat": {
 							MethodNode concat = Stringy.makeConcat(Type.getArgumentTypes(idin.desc));
 							//System.out.println("Transforming " + idin.name + idin.desc + " to " + concat.name + concat.desc);
-							it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, node.name, concat.name, concat.desc));
+							it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, node.name, concat.name, concat.desc, isInterface));
 							extraMethods.add(concat);
 							break;
 						}
@@ -164,7 +165,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "makeConcatWithConstants": {
 							MethodNode concat = Stringy.makeConcat((String) idin.bsmArgs[0], Type.getArgumentTypes(idin.desc), Arrays.copyOfRange(idin.bsmArgs, 1, idin.bsmArgs.length));
 							//System.out.println("Transforming " + idin.name + idin.desc + " to " + concat.name + concat.desc);
-							it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, node.name, concat.name, concat.desc));
+							it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, node.name, concat.name, concat.desc, isInterface));
 							extraMethods.add(concat);
 							break;
 						}
@@ -225,7 +226,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							}
 
 							//System.out.println("Transforming " + idin.name + idin.desc + " to " + concat.name + concat.desc);
-							it.set(new MethodInsnNode(Opcodes.INVOKESPECIAL, node.name, implementation.name, implementation.desc));
+							Verify.verify(!isInterface, "%s has instance method %s generated but is an interface?", node.name, idin.name);
+							it.set(new MethodInsnNode(Opcodes.INVOKESPECIAL, node.name, implementation.name, implementation.desc, false));
 							extraMethods.add(implementation);
 						}
 						break;
