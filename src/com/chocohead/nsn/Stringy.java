@@ -47,8 +47,12 @@ public class Stringy {
 				return "(J)Ljava/lang/StringBuilder;";
 
 			case Type.OBJECT:
-				if ("java/lang/String".equals(type.getInternalName())) {
+				switch (type.getInternalName()) {
+				case "java/lang/String":
 					return "(Ljava/lang/String;)Ljava/lang/StringBuilder;";
+
+				case "java/lang/CharSequence":
+					return "(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;";
 				}
 			case Type.ARRAY:
 				return "(Ljava/lang/Object;)Ljava/lang/StringBuilder;";
@@ -153,10 +157,18 @@ public class Stringy {
 				return 26;
 
 			case Type.OBJECT:
-				if ("java/lang/String".equals(type.getInternalName())) {
+				switch (type.getInternalName()) {
+				case "java/lang/String":
 					visitor.load(arg, type);
 					visitor.invokevirtual("java/lang/String", "length", "()I", false);
 					visitor.add(Type.INT_TYPE);
+					break;
+
+				case "java/lang/CharSequence":
+					visitor.load(arg, type);
+					visitor.invokeinterface("java/lang/CharSequence", "length", "()I");
+					visitor.add(Type.INT_TYPE);
+					break;
 				}
 			default:
 				return 0;
