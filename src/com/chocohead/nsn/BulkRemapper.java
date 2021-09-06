@@ -330,11 +330,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "of()Ljava/util/List;":
 							min.owner = "java/util/Collections";
 							min.name = "emptyList";
+							min.itf = false;
 							break;
 
 						case "of(Ljava/lang/Object;)Ljava/util/List;":
 							min.owner = "java/util/Collections";
 							min.name = "singletonList";
+							min.itf = false;
 							break;
 
 						case "of([Ljava/lang/Object;)Ljava/util/List;":
@@ -351,6 +353,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "copyOf(Ljava/util/Collection;)Ljava/util/List;":
 							min.owner = "com/google/common/collect/ImmutableList";
 							min.desc = min.desc.substring(0, min.desc.length() - 15).concat("com/google/common/collect/ImmutableList;");
+							min.itf = false;
 							break;
 						}
 						break;
@@ -361,11 +364,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "of()Ljava/util/Set;":
 							min.owner = "java/util/Collections";
 							min.name = "emptySet";
+							min.itf = false;
 							break;
 
 						case "of(Ljava/lang/Object;)Ljava/util/Set;":
 							min.owner = "java/util/Collections";
 							min.name = "singleton";
+							min.itf = false;
 							break;
 
 						case "of([Ljava/lang/Object;)Ljava/util/Set;":
@@ -379,11 +384,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
 						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Set;":
 							min.owner = "com/chocohead/nsn/Sets";
+							min.itf = false;
 							break;
 
 						case "copyOf(Ljava/util/Collection;)Ljava/util/Set;":
 							min.owner = "com/google/common/collect/ImmutableSet";
 							min.desc = "(Ljava/util/Collection;)Lcom/google/common/collect/ImmutableSet;";
+							min.itf = false;
 							break;
 						}
 						break;
@@ -416,11 +423,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "of()Ljava/util/Map;":
 							min.owner = "java/util/Collections";
 							min.name = "emptyMap";
+							min.itf = false;
 							break;
 
 						case "of(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
 							min.owner = "java/util/Collections";
 							min.name = "singletonMap";
+							min.itf = false;
 							break;
 
 						case "copyOf(Ljava/util/Map;)Ljava/util/Map;":
@@ -430,6 +439,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
 							min.owner = "com/google/common/collect/ImmutableMap";
 							min.desc = min.desc.substring(0, min.desc.length() - 14).concat("com/google/common/collect/ImmutableMap;");
+							min.itf = false;
 							break;
 
 						case "entry(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;": //A non-null and non-Serialisable Entry is a bit weird
@@ -439,6 +449,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
 						case "of(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map;":
 							min.owner = "com/chocohead/nsn/Maps";
+							min.itf = false;
 							break;
 
 						case "ofEntries([Ljava/util/Map$Entry;)Ljava/util/Map;":
@@ -448,6 +459,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.owner = "com/google/common/collect/ImmutableMap";
 							min.name = "copyOf";
 							min.desc = "(Ljava/lang/Iterable;)Lcom/google/common/collect/ImmutableMap;";
+							min.itf = false;
 							break;
 						}
 						break;
@@ -528,6 +540,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						if ("of".equals(min.name) && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(min.desc)) {
 							min.owner = "java/nio/file/Paths";
 							min.name = "get";
+							min.itf = false;
 						}
 						break;
 					}
