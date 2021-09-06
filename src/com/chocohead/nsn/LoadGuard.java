@@ -51,8 +51,8 @@ public class LoadGuard implements PreLaunchEntrypoint {
 				if (Modifier.isStatic(method.access) && (Annotations.getVisible(method, Accessor.class) != null || Annotations.getVisible(method, Invoker.class) != null)) {
 					String target = Iterables.getOnlyElement(accessor.getTargetClasses()); //If it has an accessor or invoker Mixin mandates there only be one target
 					BulkRemapper.HUMBLE_INTERFACES.remove(target.replace('.', '/'), node.name);
-	                continue on;
-	            }
+					continue on;
+				}
 			}
 
 			if (accessor.getTargetClasses().size() > 1) {

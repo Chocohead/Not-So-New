@@ -199,32 +199,32 @@ public class Stringy {
 
 		int textFrom = -1;
 		for (int i = 0, textIn = 0, arg = 0, slot = 0, constant = 0; i < recipe.length(); i++) {
-        	switch (recipe.charAt(i)) {
-        	case RecipePart.CONSTANT:
-        		if (textFrom >= 0) {
-        			recipeParts.add(new ConstantPart(recipe.substring(textFrom, textFrom + textIn)));
-        			textIn = 0;
-        			textFrom = -1;
-        		}
-        		recipeParts.add(new ConstantPart(constants[constant++]));
-        		break;
+			switch (recipe.charAt(i)) {
+			case RecipePart.CONSTANT:
+				if (textFrom >= 0) {
+					recipeParts.add(new ConstantPart(recipe.substring(textFrom, textFrom + textIn)));
+					textIn = 0;
+					textFrom = -1;
+				}
+				recipeParts.add(new ConstantPart(constants[constant++]));
+				break;
 
-        	case RecipePart.ARGUMENT:
-        		if (textFrom >= 0) {
-        			recipeParts.add(new ConstantPart(recipe.substring(textFrom, textFrom + textIn)));
-        			textIn = 0;
-        			textFrom = -1;
-        		}
-        		recipeParts.add(new ArgumentPart(args[arg], slot));
-        		slot += args[arg++].getSize();
-        		break;
+			case RecipePart.ARGUMENT:
+				if (textFrom >= 0) {
+					recipeParts.add(new ConstantPart(recipe.substring(textFrom, textFrom + textIn)));
+					textIn = 0;
+					textFrom = -1;
+				}
+				recipeParts.add(new ArgumentPart(args[arg], slot));
+				slot += args[arg++].getSize();
+				break;
 
-        	default:
-        		if (textFrom < 0) textFrom = i;
-        		textIn++;
-        		break;
-        	}   
-        }
+			default:
+				if (textFrom < 0) textFrom = i;
+				textIn++;
+				break;
+			}
+		}
 		if (textFrom >= 0) {
 			recipeParts.add(new ConstantPart(recipe.substring(textFrom)));
 		}

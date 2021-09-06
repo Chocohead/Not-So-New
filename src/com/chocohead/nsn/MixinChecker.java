@@ -66,18 +66,18 @@ public class MixinChecker extends ClassVisitor {
 
 								IReferenceMapper out = refmap != null ? ReferenceMapper.read(refmap) : ReferenceMapper.DEFAULT_MAPPER;
 								if (MixinEnvironment.getDefaultEnvironment().getOption(Option.REFMAP_REMAP)) {
-						            out = RemappingReferenceMapper.of(MixinEnvironment.getDefaultEnvironment(), out);
-						        }
+									out = RemappingReferenceMapper.of(MixinEnvironment.getDefaultEnvironment(), out);
+								}
 
 								return out;
 							});
 
 							String remap;
 							if (remapper instanceof IClassReferenceMapper) {
-					            remap = ((IClassReferenceMapper) remapper).remapClassName(mixinName, target);
-					        } else {
-					            remap = remapper.remap(mixinName, target);
-					        }
+								remap = ((IClassReferenceMapper) remapper).remapClassName(mixinName, target);
+							} else {
+								remap = remapper.remap(mixinName, target);
+							}
 
 							//System.out.println(config.getName() + " remapped " + target + " to " + remap + " for " + MixinChecker.this.name);
 							if (!target.equals(remap)) return remap.replace('.', '/');
