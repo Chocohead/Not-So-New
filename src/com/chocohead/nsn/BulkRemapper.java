@@ -296,7 +296,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/Optional": {
-						if ("isEmpty".equals(min.name) && "()Z".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "isEmpty()Z": {
 							min.name = "isPresent";
 							LabelNode present = new LabelNode();
 							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
@@ -306,6 +307,20 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.add(present);
 							it.add(new InsnNode(Opcodes.ICONST_1));
 							it.add(next);
+							break;
+						}
+
+						case "ifPresentOrElse(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V":
+						case "or(Ljava/util/function/Supplier;)Ljava/util/Optional;":
+						case "stream()Ljava/util/stream/Stream;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Optionals";
+							min.desc = "(Ljava/util/Optional;".concat(min.desc.substring(1));
+							break;
+
+						case "orElseThrow()Ljava/lang/Object;":
+							min.name = "get";
+							break;
 						}
 						break;
 					}
