@@ -523,6 +523,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 						break;
 					}
+
+					case "java/nio/file/Path": {
+						if ("of".equals(min.name) && "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;".equals(min.desc)) {
+							min.owner = "java/nio/file/Paths";
+							min.name = "get";
+						}
+						break;
+					}
 					}
 					break;
 				}
