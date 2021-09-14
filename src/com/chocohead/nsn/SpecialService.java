@@ -23,7 +23,6 @@ import net.fabricmc.loader.api.FabricLoader;
 
 public class SpecialService {
 	private static Stage stage;
-	static Set<String> existingEntrypoints = new HashSet<>();
 	static Set<String> extraTransforms;
 
 	private enum Stage {
@@ -114,8 +113,9 @@ public class SpecialService {
 				try {
 					@SuppressWarnings("unchecked") //Some would say that it is
 					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
+					assert extraTransforms.stream().noneMatch(patches::containsKey);
 
-					for (String name : BulkRemapper.toTransform.getTargets()) {
+					for (String name : BulkRemapper.toTransform.getMixinTargets()) {
 						name = name.replace('/', '.');
 						if (!existingEntrypoints.contains(name)) patches.remove(name);
 					}
@@ -145,6 +145,7 @@ public class SpecialService {
 				}
 			}
 		};
+		static Set<String> existingEntrypoints = new HashSet<>();
 
 		abstract void onSwitch();
 	}

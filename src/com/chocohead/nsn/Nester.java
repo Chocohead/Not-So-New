@@ -28,6 +28,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Sets;
 import com.google.common.io.MoreFiles;
 
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
@@ -49,6 +50,7 @@ import net.fabricmc.loader.api.ModContainer;
 public class Nester {
 	public static class ScanResult {
 		final Set<String> toTransform = new ObjectOpenHashSet<>(4096);
+		final Set<String> pluginClasses = new ObjectOpenHashSet<>(32);
 		final ListMultimap<String, Supplier<String>> interfaceTargets = ArrayListMultimap.create(64, 4);
 		SetMultimap<String, ClassReader> nests = Multimaps.newSetMultimap(new HashMap<>(128), ReferenceOpenHashSet::new);
 		CompletableFuture<Map<String, Consumer<ClassNode>>> nestTransforms;
@@ -58,6 +60,10 @@ public class Nester {
 
 		public Set<String> getTargets() {
 			return Collections.unmodifiableSet(toTransform);
+		}
+
+		public Set<String> getMixinTargets() {
+			return Sets.difference(toTransform, pluginClasses);
 		}
 
 		public ListMultimap<String, Supplier<String>> getInterfaceTargets() {
@@ -170,10 +176,14 @@ public class Nester {
 								ClassReader reader = new ClassReader(in);
 								String name = reader.getClassName();
 								//System.out.println("Planning to transform ".concat(name));
-								reader.accept(checker, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+								reader.accept(checker, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
 
 								if (!checker.isMixin()) {
 									result.toTransform.add(name);
+
+									if (checker.isMixinPlugin()) {
+										result.pluginClasses.addAll(checker.getPluginClasses());
+									}
 
 									if (checker.inNestedSystem()) {
 										result.nests.put(checker.isNestHost() ? name : checker.getNestHost(), reader);

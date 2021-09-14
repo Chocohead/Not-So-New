@@ -56,7 +56,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		}
 
 		mixinPackage = mixinPackage.replace('.', '/');
-		generateMixin(mixinPackage.concat("SuperMixin"), toTransform.getTargets());
+		generateMixin(mixinPackage.concat("SuperMixin"), toTransform.getMixinTargets());
 		generateMixin(mixinPackage.concat("InterfaceMixin"), HUMBLE_INTERFACES.keySet());
 
 		for (Entry<String, Consumer<ClassNode>> entry : toTransform.getNestTransforms().entrySet()) {

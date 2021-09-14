@@ -16,6 +16,7 @@ import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
@@ -24,6 +25,7 @@ import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.Mixins;
 import org.spongepowered.asm.mixin.MixinEnvironment.Option;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.refmap.IClassReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.IReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.ReferenceMapper;
@@ -32,6 +34,7 @@ import org.spongepowered.asm.mixin.transformer.Config;
 
 public class MixinChecker extends ClassVisitor {
 	private static final String TARGET = Type.getDescriptor(Mixin.class);
+	private static final String PLUGIN = Type.getInternalName(IMixinConfigPlugin.class);
 	private final AnnotationVisitor mixinVisitor = new AnnotationVisitor(api) {
 		private final Map<IMixinConfig, IReferenceMapper> remappers = new IdentityHashMap<>();
 
@@ -93,11 +96,29 @@ public class MixinChecker extends ClassVisitor {
 			}
 		}
 	};
+	private final MethodVisitor pluginVisitor = new TypeSpectator() {
+		private final Set<Type> seenTypes = new ObjectOpenHashSet<>();
+
+		@Override
+		protected void visitType(Type type) {
+			if (type.getSort() != Type.OBJECT) throw new IllegalArgumentException("Raw non-object type " + type + " in " + name);
+
+			//Java types we can't transform no matter what so no point keeping those 
+			if (!type.getInternalName().startsWith("java/")) seenTypes.add(type);
+		}
+
+		@Override
+		public void visitEnd() {
+			pluginTypes.addAll(seenTypes);
+			seenTypes.clear();
+		}
+	};
 	private String name;
 	private final List<Supplier<String>> targets = new ArrayList<>();
-	private boolean isMixin;
+	private boolean isMixin, isPlugin;
 	private String nestHost;
 	private final Set<String> nestMates = new ObjectOpenHashSet<>();
+	private final Set<Type> pluginTypes = new ObjectOpenHashSet<>();
 
 	public MixinChecker() {
 		super(Opcodes.ASM9);
@@ -106,6 +127,13 @@ public class MixinChecker extends ClassVisitor {
 	@Override
 	public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
 		this.name = name;
+
+		for (String interfaceName : interfaces) {
+			if (PLUGIN.equals(interfaceName)) {
+				isPlugin = true;
+				break;
+			}
+		}
 	}
 
 	@Override
@@ -128,6 +156,12 @@ public class MixinChecker extends ClassVisitor {
 		nestMates.add(nestMember);
 	}
 
+	@Override
+	public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+		return isPlugin && ("postApply".equals(name) || "preApply".equals(name))
+				&& "(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V".equals(descriptor) ? pluginVisitor : null;
+	}
+
 	public boolean isMixin() {
 		return isMixin;
 	}
@@ -138,6 +172,14 @@ public class MixinChecker extends ClassVisitor {
 
 	Collection<Supplier<String>> getLazyTargets() {
 		return Collections.unmodifiableCollection(targets);
+	}
+
+	public boolean isMixinPlugin() {
+		return isPlugin;
+	}
+
+	public Set<String> getPluginClasses() {
+		return Collections.unmodifiableSet(pluginTypes.stream().map(Type::getInternalName).collect(Collectors.toSet()));
 	}
 
 	public boolean inNestedSystem() {
@@ -159,8 +201,10 @@ public class MixinChecker extends ClassVisitor {
 	public void reset() {
 		name = null;
 		isMixin = false;
+		isPlugin = false;
 		targets.clear();
 		nestHost = null;
 		nestMates.clear();
+		pluginTypes.clear();
 	}
 }
