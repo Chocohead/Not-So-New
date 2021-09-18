@@ -24,8 +24,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import com.google.common.base.Predicates;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
@@ -85,7 +87,6 @@ public class Nester {
 				tasks[i++] = CompletableFuture.supplyAsync(() -> resolveNestSystem(system));
 			}
 
-			nests = null;
 			nestTransforms = CompletableFuture.allOf(tasks).thenApply(empty -> {
 				Map<String, Consumer<ClassNode>> out = new HashMap<>();
 
@@ -95,14 +96,40 @@ public class Nester {
 
 				return out;
 			});
+			searchPlugins(nests.asMap().values());
+			nests = null;
+		}
+
+		private void searchPlugins(Collection<Collection<ClassReader>> systems) {
+			Set<String> names = new ObjectOpenHashSet<>(8);
+
+			for (Collection<ClassReader> system : systems) {
+				boolean pluginUsed = false;
+
+				for (ClassReader reader : system) {
+					String name = reader.getClassName();
+
+					if (pluginUsed) {
+						pluginClasses.add(name);
+					} else if (pluginClasses.contains(name)) {
+						pluginUsed = true;
+
+						pluginClasses.addAll(names);
+					} else {
+						names.add(name);
+					}
+				}
+
+				names.clear();
+			}
 		}
 
 		public Map<String, Consumer<ClassNode>> getNestTransforms() {
-			return nestTransforms.join();
+			return Maps.filterKeys(nestTransforms.join(), Predicates.not(pluginClasses::contains));
 		}
 
 		public boolean applyNestTransform(ClassNode node) {
-			Consumer<ClassNode> out = getNestTransforms().get(node.name);
+			Consumer<ClassNode> out = nestTransforms.join().get(node.name);
 
 			if (out != null) {
 				out.accept(node);
