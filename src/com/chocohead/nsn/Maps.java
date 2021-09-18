@@ -11,6 +11,11 @@ public class Maps {
 		return new ImmutableNonullEntry<>(key, value);
 	}
 
+	@SuppressWarnings("unchecked")
+	public static <K, V> Entry<K, V> copyOf(Entry<? extends K, ? extends V> entry) {
+		return Objects.requireNonNull(entry) instanceof ImmutableNonullEntry ? (Entry<K, V>) entry : entry(entry.getKey(), entry.getValue());
+	}
+
 	public static final class ImmutableNonullEntry<K, V> implements Entry<K, V> {
 		private final K key;
 		private final V value;

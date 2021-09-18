@@ -325,6 +325,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/Collection": {
+						if ("toArray".equals(min.name) && "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(min.desc)) {
+							doToArray(it, min);
+						}
+						break;
+					}
+
 					case "java/util/List": {
 						switch (min.name.concat(min.desc)) {
 						case "of()Ljava/util/List;":
@@ -354,6 +361,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.owner = "com/google/common/collect/ImmutableList";
 							min.desc = min.desc.substring(0, min.desc.length() - 15).concat("com/google/common/collect/ImmutableList;");
 							min.itf = false;
+							break;
+
+						case "toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;":
+							doToArray(it, min);
 							break;
 						}
 						break;
@@ -391,6 +402,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.owner = "com/google/common/collect/ImmutableSet";
 							min.desc = "(Ljava/util/Collection;)Lcom/google/common/collect/ImmutableSet;";
 							min.itf = false;
+							break;
+
+						case "toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;":
+							doToArray(it, min);
 							break;
 						}
 						break;
@@ -461,6 +476,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.desc = "(Ljava/lang/Iterable;)Lcom/google/common/collect/ImmutableMap;";
 							min.itf = false;
 							break;
+						}
+						break;
+					}
+
+					case "java/util/Map$Entry": {
+						if ("copyOf".equals(min.name) && "(Ljava/util/Map$Entry;)Ljava/util/Map$Entry;".equals(min.desc)) {
+							min.owner = "com/chocohead/nsn/Maps";
+							min.itf = false;
 						}
 						break;
 					}
@@ -551,5 +574,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			}
 		}
 		node.methods.addAll(extraMethods);
+	}
+
+	private static void doToArray(ListIterator<AbstractInsnNode> it, MethodInsnNode min) {
+		it.previous();
+		it.add(new InsnNode(Opcodes.ICONST_0));
+		it.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/function/IntFunction", "apply", "(I)Ljava/lang/Object;", true));
+		it.add(new TypeInsnNode(Opcodes.CHECKCAST, "[Ljava/lang/Object;"));
+		it.next();
+		min.desc = "([Ljava/lang/Object;)[Ljava/lang/Object;";
 	}
 }
