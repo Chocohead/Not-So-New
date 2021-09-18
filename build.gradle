@@ -11,7 +11,7 @@ buildscript {
 		}
 	}
 	dependencies {
-		classpath 'com.github.Chocohead:Fabric-Loom:66ed9fe'
+		classpath 'com.github.Chocohead:Fabric-Loom:3219e42'
 	}
 }
 
@@ -21,7 +21,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 archivesBaseName = 'NotSoNew'
-version = '3.23'
+version = '3.24'
 
 repositories {
 	maven { 

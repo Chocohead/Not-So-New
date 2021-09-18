@@ -86,6 +86,7 @@ public class Recordy {
 			method.iconst(1);
 			method.areturn(Type.BOOLEAN_TYPE);
 			method.mark(notIdenticallyEqual);
+			method.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
 
 			method.load(1, InstructionAdapter.OBJECT_TYPE);
 			method.instanceOf(thisType);
@@ -94,12 +95,14 @@ public class Recordy {
 			method.iconst(0);
 			method.areturn(Type.BOOLEAN_TYPE);
 			method.mark(isInstance);
+			method.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
 
 			if (fields.length > 0) {
 				method.load(1, InstructionAdapter.OBJECT_TYPE);
 				method.checkcast(thisType);
 				method.store(2, thisType);
 
+				boolean first = true;
 				for (Handle field : fields) {
 					method.load(0, thisType);
 					method.getfield(type, field.getName(), field.getDesc());
@@ -111,6 +114,12 @@ public class Recordy {
 					method.iconst(0);
 					method.areturn(Type.BOOLEAN_TYPE);
 					method.mark(equal);
+					if (first) {
+						first = false;
+						method.visitFrame(Opcodes.F_APPEND, 1, new Object[] {thisType.getInternalName()}, 0, null);
+					} else {
+						method.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+					}
 				}
 			}
 
