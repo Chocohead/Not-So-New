@@ -252,6 +252,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.desc = min.desc.substring(0, min.desc.length() - 11).concat("Buffer;");
 							it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/ByteBuffer"));
 							break;
+
+						case "slice()Ljava/nio/ByteBuffer;":
+						case "slice(II)Ljava/nio/ByteBuffer;":
+						case "duplicate()Ljava/nio/ByteBuffer;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/lwjgl/system/MemoryUtil";
+					        min.name = prependMem(min.name);
+							min.desc = "(Ljava/nio/ByteBuffer;".concat(min.desc.substring(1));
+							break;
 						}
 						break;
 					}
@@ -268,6 +277,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.desc = min.desc.substring(0, min.desc.length() - 12).concat("Buffer;");
 							it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/FloatBuffer"));
 							break;
+
+						case "slice()Ljava/nio/FloatBuffer;":
+						case "slice(II)Ljava/nio/FloatBuffer;":
+						case "duplicate()Ljava/nio/FloatBuffer;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/lwjgl/system/MemoryUtil";
+					        min.name = prependMem(min.name);
+							min.desc = "(Ljava/nio/FloatBuffer;".concat(min.desc.substring(1));
+							break;
 						}
 						break;
 					}
@@ -283,6 +301,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "rewind()Ljava/nio/IntBuffer;":
 							min.desc = min.desc.substring(0, min.desc.length() - 10).concat("Buffer;");
 							it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/IntBuffer"));
+							break;
+
+						case "slice()Ljava/nio/IntBuffer;":
+						case "slice(II)Ljava/nio/IntBuffer;":
+						case "duplicate()Ljava/nio/IntBuffer;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/lwjgl/system/MemoryUtil";
+					        min.name = prependMem(min.name);
+							min.desc = "(Ljava/nio/IntBuffer;".concat(min.desc.substring(1));
 							break;
 						}
 						break;
@@ -412,10 +439,85 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/lang/String": {
-						if ("repeat".equals(min.name) && "(I)Ljava/lang/String;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "strip()Ljava/lang/String;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/lang3/StringUtils";
+							min.desc = "(Ljava/lang/String;)Ljava/lang/String;";
+							break;
+
+						case "stripLeading()Ljava/lang/String;":
+							it.previous();
+							it.add(new InsnNode(Opcodes.ACONST_NULL));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/lang3/StringUtils";
+							min.name = "stripStart";
+							min.desc = "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;";
+							break;
+
+						case "stripTrailing()Ljava/lang/String;":
+							it.previous();
+							it.add(new InsnNode(Opcodes.ACONST_NULL));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/lang3/StringUtils";
+							min.name = "stripEnd";
+							min.desc = "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;";
+							break;
+
+						case "isBlank()Z":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/lang3/StringUtils";
+							min.desc = "(Ljava/lang/CharSequence;)Z";
+							break;
+
+						case "lines()Ljava/util/stream/Stream;":
+						case "indent(I)Ljava/lang/String;":
+						case "stripIndent()Ljava/lang/String;":
+						case "translateEscapes()Ljava/lang/String;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Strings";
+							min.desc = "(Ljava/lang/String;".concat(min.desc.substring(1));
+							break;
+
+						case "transform(Ljava/util/function/Function;)Ljava/lang/Object;":
+							it.previous();
+							it.add(new InsnNode(Opcodes.SWAP));
+							it.next();
+							min.setOpcode(Opcodes.INVOKEINTERFACE);
+							min.owner = "java/util/function/Function";
+							min.name = "apply";
+							min.desc = "(Ljava/lang/Object;)Ljava/lang/Object;";
+							min.itf = true;
+							break;
+
+						case "chars()Ljava/util/stream/IntStream;":
+						case "codePoints()Ljava/util/stream/IntStream;":
+							break; //Although String overrides were added in J9, CharSequence added these in J8 
+
+						case "formatted([Ljava/lang/Object;)Ljava/lang/String;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.name = "format";
+							min.desc = "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;";
+							break;
+
+						case "repeat(I)Ljava/lang/String;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "com/google/common/base/Strings"; //Guava's implementation is closer than Apache's StringUtils
 							min.desc = "(Ljava/lang/String;I)Ljava/lang/String;";
+							break;
+
+						case "describeConstable()Ljava/util/Optional;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "java/util/Optional";
+							min.name = "of";
+							min.desc = "(Ljava/lang/Object;)Ljava/util/Optional;";
+							break;
+
+						case "resolveConstantDesc(Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/String;":
+							it.set(new InsnNode(Opcodes.POP));
+							break;
 						}
 						break;
 					}
@@ -574,6 +676,18 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			}
 		}
 		node.methods.addAll(extraMethods);
+	}
+
+	private static String prependMem(String to) {
+		int len = to.length();
+		char[] out = new char[len + 3];
+
+        out[0] = out[2] = 'm';
+        out[1] = 'e';
+        out[3] = Character.toTitleCase(to.charAt(0));
+        to.getChars(1, len, out, 4);
+
+        return String.valueOf(out);		
 	}
 
 	private static void doToArray(ListIterator<AbstractInsnNode> it, MethodInsnNode min) {
