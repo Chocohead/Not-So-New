@@ -14,6 +14,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 
 import org.spongepowered.asm.mixin.MixinEnvironment;
+import org.spongepowered.asm.mixin.MixinEnvironment.Option;
 import org.spongepowered.asm.mixin.transformer.FabricMixinTransformerProxy;
 import org.spongepowered.asm.service.IClassTracker;
 import org.spongepowered.asm.service.IMixinService;
@@ -63,6 +64,11 @@ public class SpecialService {
 					FieldUtils.writeDeclaredField(delegate, "transformInitialized", true, true); 
 				} catch (ReflectiveOperationException | ClassCastException e) {
 					throw new RuntimeException("Failed to fake Mixin transformer", e);
+				}
+
+				MixinEnvironment env = MixinEnvironment.getDefaultEnvironment();
+				for (Option option : Option.values()) {
+					env.setOption(option, env.getOption(option));
 				}
 			}
 		}, BIND {
