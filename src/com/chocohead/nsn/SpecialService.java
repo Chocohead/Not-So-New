@@ -2,7 +2,9 @@ package com.chocohead.nsn;
 
 import java.io.InputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -15,7 +17,8 @@ import org.objectweb.asm.tree.ClassNode;
 
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.MixinEnvironment.Option;
-import org.spongepowered.asm.mixin.transformer.FabricMixinTransformerProxy;
+import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
+import org.spongepowered.asm.mixin.transformer.ext.IExtensionRegistry;
 import org.spongepowered.asm.service.IClassTracker;
 import org.spongepowered.asm.service.IMixinService;
 import org.spongepowered.asm.service.MixinService;
@@ -32,14 +35,7 @@ public class SpecialService {
 			void onSwitch() {
 				try {
 					Object delegate = FieldUtils.readDeclaredField(SpecialService.class.getClassLoader(), "delegate", true);
-					FieldUtils.writeDeclaredField(delegate, "mixinTransformer", new FabricMixinTransformerProxy() {{
-							try {
-								FieldUtils.writeDeclaredStaticField(MixinEnvironment.class, "transformer", null, true);
-							} catch (ReflectiveOperationException e) {
-								throw new RuntimeException("Failed to reset active Mixin transformer", e);
-							}
-						}
-
+					FieldUtils.writeDeclaredField(delegate, "mixinTransformer", new IMixinTransformer() {
 						@Override
 						public byte[] transformClassBytes(String name, String transformedName, byte[] basicClass) {
 							if (basicClass != null && basicClass.length >= 8) {
@@ -60,6 +56,53 @@ public class SpecialService {
 
 							return basicClass;
 						}
+
+						@Override
+						public boolean transformClass(MixinEnvironment environment, String name, ClassNode node) {
+							if (node.version > Opcodes.V1_8) {
+								BulkRemapper.transform(node);
+								BulkRemapper.toTransform.applyNestTransform(node);
+
+								return true;
+							}
+
+							return false;
+						}
+
+						@Override
+						public byte[] transformClass(MixinEnvironment environment, String name, byte[] basicClass) {
+							return transformClassBytes(name, name, basicClass);
+						}
+
+						@Override
+						public List<String> reload(String mixinClass, ClassNode classNode) {
+							return Collections.emptyList();
+						}
+
+						@Override
+						public IExtensionRegistry getExtensions() {
+							throw new UnsupportedOperationException(); //Probably won't need this
+						}
+
+						@Override
+						public boolean generateClass(MixinEnvironment environment, String name, ClassNode classNode) {
+							return false; //Wasn't generated
+						}
+
+						@Override
+						public byte[] generateClass(MixinEnvironment environment, String name) {
+							return null; //No class
+						}
+
+						@Override
+						public boolean computeFramesForClass(MixinEnvironment environment, String name, ClassNode classNode) {
+							throw new UnsupportedOperationException("The normal transformer doesn't either");
+						}
+
+						@Override
+						public void audit(MixinEnvironment environment) {
+							//All fine :)
+						}
 					}, true);
 					FieldUtils.writeDeclaredField(delegate, "transformInitialized", true, true); 
 				} catch (ReflectiveOperationException | ClassCastException e) {
@@ -79,7 +122,7 @@ public class SpecialService {
 					FieldUtils.writeDeclaredField(delegate, "transformInitialized", false, true);
 
 					@SuppressWarnings("unchecked") //Some would say that it is
-					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
+					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.impl.FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
 					existingEntrypoints.addAll(patches.keySet());
 
 					for (String name : BulkRemapper.toTransform.getTargets()) {
@@ -118,7 +161,7 @@ public class SpecialService {
 			void onSwitch() {
 				try {
 					@SuppressWarnings("unchecked") //Some would say that it is
-					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.FabricLoader) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
+					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.impl.FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
 					assert extraTransforms.stream().noneMatch(patches::containsKey);
 
 					for (String name : BulkRemapper.toTransform.getMixinTargets()) {

@@ -27,7 +27,7 @@
 		"nsn:entrypoint": "com.chocohead.nsn.Persuasion"
 	},
 	"depends": {
-		"fabricloader": [">=0.8.0 <0.11.4", ">=0.11.7 <0.12"],
+		"fabricloader": [">=0.12"],
 		"minecraft": ">=1.17-alpha.21.19.a",
 		"mm": ">=2.0"
 	}

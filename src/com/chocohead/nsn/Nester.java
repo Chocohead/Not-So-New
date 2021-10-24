@@ -3,10 +3,6 @@ package com.chocohead.nsn;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
-import java.net.URISyntaxException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystemAlreadyExistsException;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
@@ -150,19 +146,6 @@ public class Nester {
 			case "java":
 			case "nsn":
 				break;
-
-			case "minecraft": {
-				String block = FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_2248").replace('.', '/');
-
-				try (FileSystem fs = FileSystems.newFileSystem(BulkRemapper.class.getResource('/' + block + ".class").toURI(), Collections.emptyMap())) {
-					for (Path root : fs.getRootDirectories()) {
-						walkTree(buffer, root, out);
-					}
-				} catch (URISyntaxException | FileSystemAlreadyExistsException | IOException e) {
-					throw new RuntimeException("Failed to read Minecraft jar", e);
-				}
-				break;
-			}
 
 			default:
 				walkTree(buffer, mod.getRootPath(), out);
