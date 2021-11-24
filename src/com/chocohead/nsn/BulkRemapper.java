@@ -39,6 +39,8 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.transformer.ext.Extensions;
 
+import net.fabricmc.loader.api.FabricLoader;
+
 import com.chocohead.mm.api.ClassTinkerers;
 import com.chocohead.nsn.Nester.ScanResult;
 
@@ -201,7 +203,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 								if (template.isEmpty()) {
 									Verify.verify(fields.length == 0, "Expected no getters but received %s", Arrays.toString(fields));
-								} else {
+								} else if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
 									String[] names = Arrays.stream(fields).map(Handle::getName).toArray(String[]::new);
 									Verify.verify(Arrays.equals(template.split(";"), names), "Expected %s == %s", template, Arrays.toString(names));
 								}
