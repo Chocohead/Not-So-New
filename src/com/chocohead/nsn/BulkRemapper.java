@@ -125,7 +125,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 	static void transform(ClassNode node) {
 		node.version = Opcodes.V1_8;
 
-		if ((node.access & Opcodes.ACC_RECORD) != 0) {
+		if ("java/lang/Record".equals(node.superName)) {
 			node.access &= ~Opcodes.ACC_RECORD;
 			node.superName = "java/lang/Object"; //Record only defines some abstract methods
 		}
@@ -144,18 +144,20 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 		List<MethodNode> extraMethods = new ArrayList<>();
 		for (MethodNode method : node.methods) {
+			if (method.desc.contains("Ljava/lang/Record;")) {
+				method.desc = method.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;");
+			}
+
 			for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
 				AbstractInsnNode insn = it.next();
 
 				switch (insn.getType()) {
 				case AbstractInsnNode.INVOKE_DYNAMIC_INSN: {
-					Handle bootstrap = ((InvokeDynamicInsnNode) insn).bsm;
+					InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
 
-					switch (bootstrap.getOwner()) {
+					switch (idin.bsm.getOwner()) {
 					case "java/lang/invoke/StringConcatFactory": {
-						InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
-
-						switch (bootstrap.getName()) {
+						switch (idin.bsm.getName()) {
 						case "makeConcat": {
 							MethodNode concat = Stringy.makeConcat(Type.getArgumentTypes(idin.desc));
 							//System.out.println("Transforming " + idin.name + idin.desc + " to " + concat.name + concat.desc);
@@ -176,8 +178,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/lang/invoke/LambdaMetafactory": {
-						InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
-
 						if (!nameToAccess.isEmpty() && idin.bsmArgs[1] instanceof Handle) {
 							Handle lambda = (Handle) idin.bsmArgs[1];
 
@@ -193,9 +193,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/lang/runtime/ObjectMethods": {
-						InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
-
-						if ("bootstrap".equals(bootstrap.getName())) {
+						if ("bootstrap".equals(idin.bsm.getName())) {
 							Handle[] fields = Arrays.copyOfRange(idin.bsmArgs, 2, idin.bsmArgs.length, Handle[].class);
 
 							if (idin.bsmArgs[1] != null) {//Is allowed to be null when idin.name is equals or hashCode
@@ -234,6 +232,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 						break;
 					}
+					}
+
+					for (int i = 0, end = idin.bsmArgs.length; i < end; i++) {
+						if (idin.bsmArgs[i] instanceof Handle) {
+							Handle handle = (Handle) idin.bsmArgs[i];
+
+							if (handle.getDesc().contains("Ljava/lang/Record;")) {
+								idin.bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner(), handle.getName(), handle.getDesc().replace("Ljava/lang/Record;", "Ljava/lang/Object;"), handle.isInterface());
+							}
+						}
 					}
 					break;
 				}
