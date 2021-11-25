@@ -362,6 +362,93 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/OptionalInt": {
+						switch (min.name.concat(min.desc)) {
+						case "isEmpty()Z": {
+							min.name = "isPresent";
+							LabelNode present = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							LabelNode next = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.GOTO, next));
+							it.add(present);
+							it.add(new InsnNode(Opcodes.ICONST_1));
+							it.add(next);
+							break;
+						}
+
+						case "ifPresentOrElse(Ljava/util/function/IntConsumer;Ljava/lang/Runnable;)V":
+						case "stream()Ljava/util/stream/IntStream;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Optionals";
+							min.desc = "(Ljava/util/OptionalInt;".concat(min.desc.substring(1));
+							break;
+
+						case "orElseThrow()I":
+							min.name = "getAsInt";
+							break;
+						}
+						break;
+					}
+
+					case "java/util/OptionalLong": {
+						switch (min.name.concat(min.desc)) {
+						case "isEmpty()Z": {
+							min.name = "isPresent";
+							LabelNode present = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							LabelNode next = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.GOTO, next));
+							it.add(present);
+							it.add(new InsnNode(Opcodes.ICONST_1));
+							it.add(next);
+							break;
+						}
+
+						case "ifPresentOrElse(Ljava/util/function/LongConsumer;Ljava/lang/Runnable;)V":
+						case "stream()Ljava/util/stream/LongStream;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Optionals";
+							min.desc = "(Ljava/util/OptionalLong;".concat(min.desc.substring(1));
+							break;
+
+						case "orElseThrow()J":
+							min.name = "getAsLong";
+							break;
+						}
+						break;
+					}
+
+					case "java/util/OptionalDouble": {
+						switch (min.name.concat(min.desc)) {
+						case "isEmpty()Z": {
+							min.name = "isPresent";
+							LabelNode present = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							LabelNode next = new LabelNode();
+							it.add(new JumpInsnNode(Opcodes.GOTO, next));
+							it.add(present);
+							it.add(new InsnNode(Opcodes.ICONST_1));
+							it.add(next);
+							break;
+						}
+
+						case "ifPresentOrElse(Ljava/util/function/DoubleConsumer;Ljava/lang/Runnable;)V":
+						case "stream()Ljava/util/stream/DoubleStream;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Optionals";
+							min.desc = "(Ljava/util/OptionalDouble;".concat(min.desc.substring(1));
+							break;
+
+						case "orElseThrow()D":
+							min.name = "getAsInt";
+							break;
+						}
+						break;
+					}
+
 					case "java/util/Collection": {
 						if ("toArray".equals(min.name) && "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(min.desc)) {
 							doToArray(it, min);
