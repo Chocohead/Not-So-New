@@ -3,6 +3,7 @@ package com.chocohead.nsn;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -13,9 +14,6 @@ import java.util.stream.Collectors;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Collections2;
-
-import it.unimi.dsi.fastutil.Hash.Strategy;
-import it.unimi.dsi.fastutil.objects.ObjectOpenCustomHashSet;
 
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -38,26 +36,22 @@ public class ForwardingFactory extends ClassLoader {
 			this.handler = method;
 			this.writer = writer;
 		}
+
+		@Override
+		public int hashCode() {
+			return method.hashCode();
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof Handler && method.equals(((Handler) obj).method);
+		}
 	}
 
 	public static class Builder<T> {
 		private final Class<T> type;
 		private final T instance;
-		private final Set<Handler> handlers = new ObjectOpenCustomHashSet<>(new Strategy<Handler>() {
-			@Override
-			public int hashCode(Handler handler) {
-				return handler == null ? 0 : handler.method.hashCode();
-			}
-
-			@Override
-			public boolean equals(Handler a, Handler b) {
-				if (a == null) {
-					return b == null;
-				} else {
-					return b != null && a.method.equals(b.method);
-				}
-			}
-		});
+		private final Set<Handler> handlers = new HashSet<>();
 
 		Builder(Class<T> type, T instance) {
 			this.type = type;
@@ -107,7 +101,7 @@ public class ForwardingFactory extends ClassLoader {
 			}
 
 			case Type.SHORT: {
-				to = Type.getObjectType( "java/lang/Short");
+				to = Type.getObjectType("java/lang/Short");
 				convert = new Method("shortValue", "()S");
 				break;
 			}
