@@ -20,7 +20,7 @@ public class Persuasion implements LanguageAdapter {
 
 	public Persuasion() {
 		real = JavaVersion.current();
-		set(16);
+		set(17);
 
 		MixinBootstrap.getPlatform().addContainer(new IContainerHandle() {			
 			@Override
