@@ -3,21 +3,18 @@ package com.chocohead.nsn;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import com.google.common.base.Verify;
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.SetMultimap;
-
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import it.unimi.dsi.fastutil.objects.Object2IntMaps;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -45,7 +42,7 @@ import com.chocohead.mm.api.ClassTinkerers;
 import com.chocohead.nsn.Nester.ScanResult;
 
 public class BulkRemapper implements IMixinConfigPlugin {
-	static final SetMultimap<String, String> HUMBLE_INTERFACES = HashMultimap.create(64, 4);
+	static final Map<String, Set<String>> HUMBLE_INTERFACES = new HashMap<>(64);
 	static ScanResult toTransform = Nester.run();
 
 	@Override
@@ -53,8 +50,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		Persuasion.flip(); //We've done the persuading now
 		StickyTape.tape();
 
-		for (Entry<String, Supplier<String>> entry : toTransform.getInterfaceTargets().entries()) {
-			HUMBLE_INTERFACES.put(entry.getValue().get(), entry.getKey());
+		for (Entry<String, List<Supplier<String>>> entry : toTransform.getInterfaceTargets().entrySet()) {
+			for (Supplier<String> target : entry.getValue()) {
+				HUMBLE_INTERFACES.computeIfAbsent(target.get(), k -> new HashSet<>(4)).add(entry.getKey());
+			}
 		}
 
 		mixinPackage = mixinPackage.replace('.', '/');
@@ -131,15 +130,17 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		}
 		boolean isInterface = Modifier.isInterface(node.access);
 
-		Object2IntMap<String> nameToAccess;
+		Set<String> privateMethods;
 		if (isInterface) {
-			nameToAccess = new Object2IntOpenHashMap<>();
+			privateMethods = new HashSet<>();
 
 			for (MethodNode method : node.methods) {
-				nameToAccess.put(method.name.concat(method.desc), method.access);
+				if (Modifier.isPrivate(method.access)) {
+					privateMethods.add(method.name.concat(method.desc));
+				}
 			}
 		} else {
-			nameToAccess = Object2IntMaps.emptyMap();
+			privateMethods = Collections.emptySet();
 		}
 
 		List<MethodNode> extraMethods = new ArrayList<>();
@@ -178,13 +179,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/lang/invoke/LambdaMetafactory": {
-						if (!nameToAccess.isEmpty() && idin.bsmArgs[1] instanceof Handle) {
+						if (!privateMethods.isEmpty() && idin.bsmArgs[1] instanceof Handle) {
 							Handle lambda = (Handle) idin.bsmArgs[1];
 
 							if (node.name.equals(lambda.getOwner()) && lambda.getTag() == Opcodes.H_INVOKEINTERFACE) {
-								int access = nameToAccess.getInt(lambda.getName().concat(lambda.getDesc()));
-
-								if (access != nameToAccess.defaultReturnValue() && Modifier.isPrivate(access)) {
+								if (privateMethods.contains(lambda.getName().concat(lambda.getDesc()))) {
 									idin.bsmArgs[1] = new Handle(Opcodes.H_INVOKESPECIAL, lambda.getOwner(), lambda.getName(), lambda.getDesc(), lambda.isInterface());
 								}
 							}
@@ -200,10 +199,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								String template = (String) idin.bsmArgs[1];
 
 								if (template.isEmpty()) {
-									Verify.verify(fields.length == 0, "Expected no getters but received %s", Arrays.toString(fields));
+									if (fields.length != 0) throw new AssertionError(String.format("Expected no getters but received %s", Arrays.toString(fields)));
 								} else if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
 									String[] names = Arrays.stream(fields).map(Handle::getName).toArray(String[]::new);
-									Verify.verify(Arrays.equals(template.split(";"), names), "Expected %s == %s", template, Arrays.toString(names));
+									if (!Arrays.equals(template.split(";"), names)) throw new AssertionError(String.format("Expected %s == %s", template, Arrays.toString(names)));
 								}
 							}
 
@@ -226,7 +225,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							}
 
 							//System.out.println("Transforming " + idin.name + idin.desc + " to " + concat.name + concat.desc);
-							Verify.verify(!isInterface, "%s has instance method %s generated but is an interface?", node.name, idin.name);
+							if (isInterface) throw new AssertionError(String.format("%s has instance method %s generated but is an interface?", node.name, idin.name));
 							it.set(new MethodInsnNode(Opcodes.INVOKESPECIAL, node.name, implementation.name, implementation.desc, false));
 							extraMethods.add(implementation);
 						}
@@ -738,6 +737,17 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "readString(Ljava/nio/file/Path;)Ljava/lang/String;":
 						case "readString(Ljava/nio/file/Path;Ljava/nio/charset/Charset;)Ljava/lang/String;":
 							min.owner = "com/chocohead/nsn/MoreFiles";
+							break;
+						}
+						break;
+					}
+
+					case "java/nio/file/FileSystems": {
+						switch (min.name.concat(min.desc)) {
+						case "newFileSystem(Ljava/nio/file/Path;)Ljava/nio/file/FileSystem;":
+						case "newFileSystem(Ljava/nio/file/Path;Ljava/util/Map;)Ljava/nio/file/FileSystem;":
+						case "newFileSystem(Ljava/nio/file/Path;Ljava/util/Map;Ljava/lang/ClassLoader;)Ljava/nio/file/FileSystem;":
+							min.owner = "com/chocohead/nsn/FiledSystems";
 							break;
 						}
 						break;

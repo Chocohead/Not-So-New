@@ -25,6 +25,8 @@ import org.spongepowered.asm.service.MixinService;
 
 import net.fabricmc.loader.api.FabricLoader;
 
+import com.chocohead.nsn.util.Fields;
+
 public class SpecialService {
 	private static Stage stage;
 	static Set<String> extraTransforms;
@@ -34,8 +36,8 @@ public class SpecialService {
 			@Override
 			void onSwitch() {
 				try {
-					Object delegate = FieldUtils.readDeclaredField(SpecialService.class.getClassLoader(), "delegate", true);
-					FieldUtils.writeDeclaredField(delegate, "mixinTransformer", new IMixinTransformer() {
+					Object delegate = Fields.readDeclared(SpecialService.class.getClassLoader(), "delegate");
+					Fields.writeDeclared(delegate, "mixinTransformer", new IMixinTransformer() {
 						@Override
 						public byte[] transformClassBytes(String name, String transformedName, byte[] basicClass) {
 							if (basicClass != null && basicClass.length >= 8) {
@@ -103,8 +105,8 @@ public class SpecialService {
 						public void audit(MixinEnvironment environment) {
 							//All fine :)
 						}
-					}, true);
-					FieldUtils.writeDeclaredField(delegate, "transformInitialized", true, true); 
+					});
+					Fields.writeDeclared(delegate, "transformInitialized", true);
 				} catch (ReflectiveOperationException | ClassCastException e) {
 					throw new RuntimeException("Failed to fake Mixin transformer", e);
 				}
@@ -118,11 +120,11 @@ public class SpecialService {
 			@Override
 			void onSwitch() {
 				try {
-					Object delegate = FieldUtils.readDeclaredField(SpecialService.class.getClassLoader(), "delegate", true);
-					FieldUtils.writeDeclaredField(delegate, "transformInitialized", false, true);
+					Object delegate = Fields.readDeclared(SpecialService.class.getClassLoader(), "delegate");
+					Fields.writeDeclared(delegate, "transformInitialized", false);
 
 					@SuppressWarnings("unchecked") //Some would say that it is
-					Map<String, byte[]> patches = (Map<String, byte[]>) FieldUtils.readDeclaredField(((net.fabricmc.loader.impl.FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses", true);
+					Map<String, byte[]> patches = (Map<String, byte[]>) Fields.readDeclared(((net.fabricmc.loader.impl.FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses");
 					existingEntrypoints.addAll(patches.keySet());
 
 					for (String name : BulkRemapper.toTransform.getTargets()) {
@@ -213,8 +215,8 @@ public class SpecialService {
 		}).handling("getClassTracker", IClassTracker.class, () -> null).make();
 
 		try {
-			MixinService instance = (MixinService) FieldUtils.readDeclaredStaticField(MixinService.class, "instance", true);
-			FieldUtils.writeDeclaredField(instance, "service", service, true);
+			MixinService instance = (MixinService) Fields.readDeclared(MixinService.class, "instance");
+			Fields.writeDeclared(instance, "service", service);
 		} catch (ReflectiveOperationException | ClassCastException e) {
 			throw new RuntimeException("Failed to replace Mixin service", e);
 		}

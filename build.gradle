@@ -21,7 +21,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 archivesBaseName = 'NotSoNew'
-version = '4.5'
+version = '5.0'
 
 repositories {
 	maven { 
@@ -37,7 +37,7 @@ dependencies {
 	minecraft "com.mojang:minecraft:$mcVersion"
 	mappings "net.fabricmc:yarn:$mapping:v2"
 
-	modImplementation 'net.fabricmc:fabric-loader:0.12.3'
+	modImplementation 'net.fabricmc:fabric-loader:0.14.7'
 	//modImplementation 'net.fabricmc.fabric-api:fabric-api:0.34.3+1.17'
 	include modApi('com.github.Chocohead:Fabric-ASM:v2.3')
 }

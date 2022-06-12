@@ -3,16 +3,13 @@ package com.chocohead.nsn;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import org.apache.commons.lang3.reflect.FieldUtils;
-
-import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassVisitor;
@@ -31,6 +28,8 @@ import org.spongepowered.asm.mixin.refmap.IReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.ReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.RemappingReferenceMapper;
 import org.spongepowered.asm.mixin.transformer.Config;
+
+import com.chocohead.nsn.util.Fields;
 
 public class MixinChecker extends ClassVisitor {
 	private static final String TARGET = Type.getDescriptor(Mixin.class);
@@ -62,7 +61,7 @@ public class MixinChecker extends ClassVisitor {
 							IReferenceMapper remapper = remappers.computeIfAbsent(config, k -> {
 								String refmap;
 								try {
-									refmap = (String) FieldUtils.readDeclaredField(k, "refMapperConfig", true);
+									refmap = (String) Fields.readDeclared(k, "refMapperConfig");
 								} catch (ReflectiveOperationException | ClassCastException e) {
 									throw new RuntimeException("Error getting refmap for " + k.getName(), e);
 								}
@@ -97,7 +96,7 @@ public class MixinChecker extends ClassVisitor {
 		}
 	};
 	private final MethodVisitor pluginVisitor = new TypeSpectator() {
-		private final Set<Type> seenTypes = new ObjectOpenHashSet<>();
+		private final Set<Type> seenTypes = new HashSet<>();
 
 		@Override
 		protected void visitType(Type type) {
@@ -117,8 +116,8 @@ public class MixinChecker extends ClassVisitor {
 	private final List<Supplier<String>> targets = new ArrayList<>();
 	private boolean isMixin, isPlugin;
 	private String nestHost;
-	private final Set<String> nestMates = new ObjectOpenHashSet<>();
-	private final Set<Type> pluginTypes = new ObjectOpenHashSet<>();
+	private final Set<String> nestMates = new HashSet<>();
+	private final Set<Type> pluginTypes = new HashSet<>();
 
 	public MixinChecker() {
 		super(Opcodes.ASM9);

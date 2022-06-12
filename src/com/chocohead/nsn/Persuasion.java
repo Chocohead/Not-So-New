@@ -4,8 +4,6 @@ import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Collections;
 
-import org.apache.commons.lang3.reflect.FieldUtils;
-
 import org.spongepowered.asm.launch.MixinBootstrap;
 import org.spongepowered.asm.launch.platform.container.IContainerHandle;
 import org.spongepowered.asm.util.Constants.ManifestAttributes;
@@ -48,8 +46,9 @@ public class Persuasion implements LanguageAdapter {
 
 	private static void set(double version) {
 		try {
-			Field field = FieldUtils.getDeclaredField(JavaVersion.class, "current", true);
-			if (field != null) field.setDouble(null, version);
+			Field field = JavaVersion.class.getDeclaredField("current");
+			field.setAccessible(true);
+			field.setDouble(null, version);
 		} catch (ReflectiveOperationException e) {
 			//Oh no
 		}

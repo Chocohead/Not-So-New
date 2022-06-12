@@ -3,15 +3,19 @@ package com.chocohead.nsn;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystemAlreadyExistsException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -21,16 +25,8 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.google.common.base.Predicates;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Multimaps;
-import com.google.common.collect.SetMultimap;
 import com.google.common.collect.Sets;
-import com.google.common.io.MoreFiles;
-
-import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
-import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -44,13 +40,16 @@ import org.objectweb.asm.tree.MethodNode;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.impl.FabricLoaderImpl;
+
+import com.chocohead.nsn.util.Fields;
 
 public class Nester {
 	public static class ScanResult {
-		final Set<String> toTransform = new ObjectOpenHashSet<>(4096);
-		final Set<String> pluginClasses = new ObjectOpenHashSet<>(32);
-		final ListMultimap<String, Supplier<String>> interfaceTargets = ArrayListMultimap.create(64, 4);
-		SetMultimap<String, ClassReader> nests = Multimaps.newSetMultimap(new HashMap<>(128), ReferenceOpenHashSet::new);
+		final Set<String> toTransform = new HashSet<>(4096);
+		final Set<String> pluginClasses = new HashSet<>(32);
+		final Map<String, List<Supplier<String>>> interfaceTargets = new HashMap<>(64);
+		Map<String, List<ClassReader>> nests = new HashMap<>(128);
 		CompletableFuture<Map<String, Consumer<ClassNode>>> nestTransforms;
 
 		ScanResult() {
@@ -64,8 +63,8 @@ public class Nester {
 			return Sets.difference(toTransform, pluginClasses);
 		}
 
-		public ListMultimap<String, Supplier<String>> getInterfaceTargets() {
-			return Multimaps.unmodifiableListMultimap(interfaceTargets);
+		public Map<String, List<Supplier<String>>> getInterfaceTargets() {
+			return Collections.unmodifiableMap(interfaceTargets);
 		}
 
 		void calculateNests() {
@@ -75,10 +74,10 @@ public class Nester {
 				//Only warming up for class loading
 			}
 			@SuppressWarnings("unchecked") //We'll be careful
-			CompletableFuture<Map<String, Consumer<ClassNode>>>[] tasks = new CompletableFuture[nests.asMap().size()];
+			CompletableFuture<Map<String, Consumer<ClassNode>>>[] tasks = new CompletableFuture[nests.size()];
 
 			int i = 0;
-			for (Collection<ClassReader> system : nests.asMap().values()) {
+			for (Collection<ClassReader> system : nests.values()) {
 				//System.out.println(system.stream().map(ClassReader::getClassName).collect(Collectors.joining(", ", "Analysing: [", "]")));
 				tasks[i++] = CompletableFuture.supplyAsync(() -> resolveNestSystem(system));
 			}
@@ -92,12 +91,12 @@ public class Nester {
 
 				return out;
 			});
-			searchPlugins(nests.asMap().values());
+			searchPlugins(nests.values());
 			nests = null;
 		}
 
-		private void searchPlugins(Collection<Collection<ClassReader>> systems) {
-			Set<String> names = new ObjectOpenHashSet<>(8);
+		private void searchPlugins(Collection<? extends Collection<ClassReader>> systems) {
+			Set<String> names = new HashSet<>(8);
 
 			for (Collection<ClassReader> system : systems) {
 				boolean pluginUsed = false;
@@ -148,13 +147,41 @@ public class Nester {
 				break;
 
 			default:
-				walkTree(buffer, mod.getRootPath(), out);
+				for (Path root : mod.getRootPaths()) {
+					walkTree(buffer, root, out);
+				}
 				break;
 			}
+		}
+		try {
+			@SuppressWarnings("unchecked")
+			Set<Path> logLibraries = (Set<Path>) Fields.readDeclared(((FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider(), "logJars");
+			for (Path library : logLibraries) {
+				walkLibrary(buffer, library, out);
+			}
+
+			@SuppressWarnings("unchecked")
+			List<Path> libraries = (List<Path>) Fields.readDeclared(((FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider(), "miscGameLibraries");
+			for (Path library : libraries) {
+				walkLibrary(buffer, library, out);
+			}
+		} catch (ReflectiveOperationException e) {
+			System.err.println("Failed to read GameProvider libraries");
+			e.printStackTrace();
 		}
 
 		out.calculateNests();
 		return out;
+	}
+
+	private static void walkLibrary(RecyclableDataInputStream buffer, Path jar, ScanResult result) {
+		try (FileSystem fs = FiledSystems.newFileSystem(jar, Collections.emptyMap())) {
+			for (Path root : fs.getRootDirectories()) {
+				walkTree(buffer, root, result);
+			}
+		} catch (FileSystemAlreadyExistsException | IOException e) {
+			throw new RuntimeException("Failed to read library jar at " + jar, e);
+		}
 	}
 
 	private static void walkTree(RecyclableDataInputStream buffer, Path jar, ScanResult result) {
@@ -167,9 +194,21 @@ public class Nester {
 					return FileVisitResult.CONTINUE;
 				}
 
+				private String getFileExtension(Path path) {
+					Path name = path.getFileName();
+
+					if (name == null) {
+						return "";
+					}
+
+					String fileName = name.toString();
+					int dotIndex = fileName.lastIndexOf('.');
+					return dotIndex == -1 ? "" : fileName.substring(dotIndex + 1);
+				}
+
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-					if ("class".equalsIgnoreCase(MoreFiles.getFileExtension(file))) {
+					if ("class".equalsIgnoreCase(getFileExtension(file))) {
 						try (DataInputStream in = buffer.open(Files.newInputStream(file))) {
 							in.mark(16);
 
@@ -196,10 +235,10 @@ public class Nester {
 									}
 
 									if (checker.inNestedSystem()) {
-										result.nests.put(checker.isNestHost() ? name : checker.getNestHost(), reader);
+										result.nests.computeIfAbsent(checker.isNestHost() ? name : checker.getNestHost(), k -> new ArrayList<>()).add(reader);
 									}
 								} else if (Modifier.isInterface(reader.getAccess())) {
-									result.interfaceTargets.putAll(name, checker.getLazyTargets());
+									result.interfaceTargets.computeIfAbsent(name, k -> new ArrayList<>(4)).addAll(checker.getLazyTargets());
 								}
 
 								checker.reset();

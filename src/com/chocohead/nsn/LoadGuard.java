@@ -27,6 +27,14 @@ import org.spongepowered.asm.util.Annotations;
 import net.fabricmc.loader.api.entrypoint.PreLaunchEntrypoint;
 
 public class LoadGuard implements PreLaunchEntrypoint {
+	private static void clearInterface(String target, String name) {
+		Set<String> interfaces = BulkRemapper.HUMBLE_INTERFACES.get(target);
+		if (interfaces == null) return; //Never considered
+
+		interfaces.remove(name);
+		if (interfaces.isEmpty()) BulkRemapper.HUMBLE_INTERFACES.remove(target);
+	}
+
 	@Override
 	@SuppressWarnings("unchecked") //Maybe a little
 	public void onPreLaunch() {
@@ -60,14 +68,14 @@ public class LoadGuard implements PreLaunchEntrypoint {
 			for (MethodNode method : node.methods) {
 				if (Modifier.isStatic(method.access) && (Annotations.getVisible(method, Accessor.class) != null || Annotations.getVisible(method, Invoker.class) != null)) {
 					String target = Iterables.getOnlyElement(accessor.getTargetClasses()); //If it has an accessor or invoker Mixin mandates there only be one target
-					BulkRemapper.HUMBLE_INTERFACES.remove(target.replace('.', '/'), node.name);
+					clearInterface(target.replace('.', '/'), node.name);
 					continue on;
 				}
 			}
 
 			if (accessor.getTargetClasses().size() > 1) {
 				for (String target : accessor.getTargetClasses()) {
-					BulkRemapper.HUMBLE_INTERFACES.remove(target.replace('.', '/'), node.name);
+					clearInterface(target.replace('.', '/'), node.name);
 				}
 				trouble.add(accessor.getClassName());
 				continue;

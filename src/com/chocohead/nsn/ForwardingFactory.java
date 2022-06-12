@@ -12,9 +12,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import com.google.common.base.Strings;
-import com.google.common.collect.Collections2;
-
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -216,13 +213,18 @@ public class ForwardingFactory extends ClassLoader {
 		Type interfaceType = Type.getType(type);
 		writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER | Opcodes.ACC_FINAL, thisType.getInternalName(), null, "java/lang/Object", new String[] {interfaceType.getInternalName()});
 
-		GeneratorAdapter constructor = new GeneratorAdapter(Opcodes.ACC_PUBLIC, new Method("<init>", '(' + interfaceType.getDescriptor() + Strings.repeat("Ljava/lang/Object;", handlers.size()) + ")V"), null, null, writer);
+		Type[] methodArgs = new Type[1 + handlers.size()];
+		methodArgs[0] = interfaceType;
+		Arrays.fill(methodArgs, 1, methodArgs.length, Type.getObjectType("java/lang/Object"));
+		GeneratorAdapter constructor = new GeneratorAdapter(Opcodes.ACC_PUBLIC, new Method("<init>", Type.VOID_TYPE, methodArgs), null, null, writer);
 		constructor.visitCode();
 		constructor.loadThis();
 		constructor.invokeConstructor(Type.getObjectType("java/lang/Object"), new Method("<init>", "()V"));
 
 		Set<Method> forwardMethods = Arrays.stream(type.getMethods()).map(Method::getMethod).collect(Collectors.toSet());
-		forwardMethods.removeAll(Collections2.transform(handlers, handler -> handler.method));
+		for (Handler handler : handlers) {
+			forwardMethods.remove(handler.method);
+		}
 
 		Object[] args = new Object[handlers.size() + 1];
 		args[0] = instance;
