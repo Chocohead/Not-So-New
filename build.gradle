@@ -67,7 +67,7 @@ processResources {
 }
 
 minecraft {
-	fieldInferenceFilter = {existingName, replacement -> false}
+	fieldInferenceFilter = {mapping, existingName, replacement -> false}
 }
 
 tasks.withType(JavaCompile) {
