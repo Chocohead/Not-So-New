@@ -23,6 +23,8 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
@@ -35,6 +37,7 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.transformer.ext.Extensions;
+import org.spongepowered.asm.util.Bytecode;
 
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -63,6 +66,83 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		for (Entry<String, Consumer<ClassNode>> entry : toTransform.getNestTransforms().entrySet()) {
 			ClassTinkerers.addTransformation(entry.getKey(), entry.getValue());
 		}
+		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_6611"), new Consumer<ClassNode>() {
+			private void assertMethod(String owner, String name, String desc, AbstractInsnNode insn) {
+				if (insn.getType() == AbstractInsnNode.METHOD_INSN) {
+					MethodInsnNode min = (MethodInsnNode) insn;
+
+					if (owner.equals(min.owner) && name.equals(min.name) && desc.equals(min.desc)) {
+						return;
+					}
+				}
+
+				throw new IllegalStateException("Expected " + owner + '#' + name + desc + " call but found " + Bytecode.describeNode(insn, false));
+			}
+
+			@Override
+			public void accept(ClassNode node) {
+				for (MethodNode method : node.methods) {
+					if ("<clinit>".equals(method.name)) {
+						int stage = -1;
+
+						out: for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
+							AbstractInsnNode insn = it.next();
+
+							switch (stage) {
+							case -1:
+								if (insn.getType() == AbstractInsnNode.LDC_INSN) {
+									LdcInsnNode lin = (LdcInsnNode) insn;
+
+									if (lin.cst instanceof Type && "Ljava/lang/Runtime;".equals(((Type) lin.cst).getDescriptor())) {
+										stage = 1;
+										it.remove();
+									}
+								}
+								break;
+
+							case 1:
+								assertMethod("java/lang/Class", "getModule", "()Ljava/lang/Module;", insn);
+								stage++;
+								it.remove();
+								break;
+
+							case 2:
+								assertMethod("java/lang/Module", "getLayer", "()Ljava/lang/ModuleLayer;", insn);
+								stage++;
+								it.remove();
+								break;
+
+							case 3:
+								if (insn.getType() == AbstractInsnNode.LDC_INSN) {
+									LdcInsnNode lin = (LdcInsnNode) insn;
+
+									if ("jdk.jfr".equals(lin.cst)) {
+										stage++;
+										it.remove();
+										continue;
+									}
+								}
+								throw new IllegalStateException("Expected jdk.jfr load but found " + Bytecode.describeNode(insn, false));
+
+							case 4:
+								assertMethod("java/lang/ModuleLayer", "findModule", "(Ljava/lang/String;)Ljava/util/Optional;", insn);
+								stage++;
+								it.remove();
+								break;
+
+							case 5:
+								assertMethod("java/util/Optional", "isPresent", "()Z", insn);
+								stage++;
+								it.set(new InsnNode(Opcodes.ICONST_0));
+								break out;
+							}
+						}
+						if (stage != 6) throw new IllegalStateException("Failed to find injection: " + stage);
+						break;
+					}
+				}
+			}
+		});
 
 		try {
 			Extensions extensions = StickyTape.grabTransformer(Extensions.class, "extensions");
@@ -238,7 +318,79 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							Handle handle = (Handle) idin.bsmArgs[i];
 
 							if (handle.getDesc().contains("Ljava/lang/Record;")) {
-								idin.bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner(), handle.getName(), handle.getDesc().replace("Ljava/lang/Record;", "Ljava/lang/Object;"), handle.isInterface());
+								idin.bsmArgs[i] = handle = new Handle(handle.getTag(), handle.getOwner(), handle.getName(), handle.getDesc().replace("Ljava/lang/Record;", "Ljava/lang/Object;"), handle.isInterface());
+							}
+
+							switch (handle.getOwner()) {
+							case "java/util/Optional": {
+								switch (handle.getName().concat(handle.getDesc())) {
+								case "ifPresentOrElse(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V":
+								case "or(Ljava/util/function/Supplier;)Ljava/util/Optional;":
+								case "stream()Ljava/util/stream/Stream;":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/chocohead/nsn/Optionals", handle.getName(), "(Ljava/util/Optional;".concat(handle.getDesc().substring(1)), false);
+									break;
+								}
+								break;
+							}
+
+							case "java/util/List": {
+								switch (handle.getName().concat(handle.getDesc())) {
+								case "of()Ljava/util/List;":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "java/util/Collections", "emptyList", handle.getDesc(), false);
+									break;
+
+								case "of(Ljava/lang/Object;)Ljava/util/List;":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "java/util/Collections", "singletonList", handle.getDesc(), false);
+									break;
+
+								case "copyOf(Ljava/util/Collection;)Ljava/util/List;":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/google/common/collect/ImmutableList", handle.getName(),
+											handle.getDesc().substring(0, handle.getDesc().length() - 15).concat("com/google/common/collect/ImmutableList;"), false);
+									break;
+								}
+								break;
+							}
+
+							case "java/util/Set": {
+								switch (handle.getName().concat(handle.getDesc())) {
+								case "of()Ljava/util/Set;":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "java/util/Collections", "emptySet", handle.getDesc(), false);
+									break;
+								}
+								break;
+							}
+							}
+						} else if (idin.bsmArgs[i] instanceof Type) {
+							Type type = (Type) idin.bsmArgs[i];
+
+							switch (type.getSort()) {
+							case Type.OBJECT:
+							case Type.ARRAY:
+								if (type.getDescriptor().contains("Ljava/lang/Record;")) {
+									idin.bsmArgs[i] = Type.getType(type.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;"));
+								}
+								break;
+
+							case Type.METHOD: {//Normally would only expect this
+								Type[] args = type.getArgumentTypes();
+								Type returnType = type.getReturnType();
+								boolean madeChange = false;
+
+								for (int j = 0; j < args.length; j++) {
+									String desc = args[j].getDescriptor();
+									if (desc.contains("Ljava/lang/Record;")) {
+										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;"));
+										madeChange = true;
+									}
+								}
+								if (returnType.getDescriptor().contains("Ljava/lang/Record;")) {
+									returnType = Type.getType(returnType.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;"));
+									madeChange = true;
+								}
+
+								if (madeChange) idin.bsmArgs[i] = Type.getMethodType(returnType, args);
+								break;
+							}
 							}
 						}
 					}
@@ -247,6 +399,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 				case AbstractInsnNode.METHOD_INSN: {
 					MethodInsnNode min = (MethodInsnNode) insn;
+
+					if (min.getOpcode() == Opcodes.INVOKEINTERFACE && node.name.equals(min.owner) && privateMethods.contains(min.name.concat(min.desc))) {
+						min.setOpcode(Opcodes.INVOKESPECIAL);
+					}
 
 					switch (min.owner) {
 					case "java/nio/ByteBuffer": {
@@ -268,6 +424,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "org/lwjgl/system/MemoryUtil";
 					        min.name = prependMem(min.name);
+							min.desc = "(Ljava/nio/ByteBuffer;".concat(min.desc.substring(1));
+							break;
+
+						case "put(ILjava/nio/ByteBuffer;II)Ljava/nio/ByteBuffer;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Buffers";
 							min.desc = "(Ljava/nio/ByteBuffer;".concat(min.desc.substring(1));
 							break;
 						}
@@ -534,6 +696,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "com/google/common/collect/ImmutableList": {
+						if ("toArray".equals(min.name) && "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(min.desc)) {
+							doToArray(it, min);
+						}
+						break;
+					}
+
 					case "java/lang/String": {
 						switch (min.name.concat(min.desc)) {
 						case "strip()Ljava/lang/String;":
@@ -624,9 +793,22 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/stream/Collectors": {
-						if ("toUnmodifiableList".equals(min.name) && "()Ljava/util/stream/Collector;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "toUnmodifiableList()Ljava/util/stream/Collector;":
 							min.owner = "com/google/common/collect/ImmutableList";
 							min.name = "toImmutableList";
+							break;
+
+						case "toUnmodifiableSet()Ljava/util/stream/Collector;":
+							min.owner = "com/google/common/collect/ImmutableSet";
+							min.name = "toImmutableSet";
+							break;
+
+						case "toUnmodifiableMap(Ljava/util/function/Function;Ljava/util/function/Function;)Ljava/util/stream/Collector;":
+						case "toUnmodifiableMap(Ljava/util/function/Function;Ljava/util/function/Function;Ljava/util/function/BinaryOperator;)Ljava/util/stream/Collector;":
+							min.owner = "com/google/common/collect/ImmutableMap";
+							min.name = "toImmutableMap";
+							break;
 						}
 						break;
 					}
@@ -687,7 +869,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/stream/Stream": {
-						if ("toList".equals(min.name) && "()Ljava/util/List;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "toList()Ljava/util/List;":
 							min.name = "toArray";
 							min.desc = "()[Ljava/lang/Object;";
 							it.add(new InsnNode(Opcodes.DUP));
@@ -696,6 +879,35 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/Arrays", "copyOf", "([Ljava/lang/Object;ILjava/lang/Class;)[Ljava/lang/Object;", false));
 							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/Arrays", "asList", "([Ljava/lang/Object;)Ljava/util/List;", false));
 							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/util/Collections", "unmodifiableList", "(Ljava/util/List;)Ljava/util/List;", false));
+							break;
+
+						case "mapMulti(Ljava/util/function/BiConsumer;)Ljava/util/stream/Stream;":
+						case "mapMultiToInt(Ljava/util/function/BiConsumer;)Ljava/util/stream/IntStream;":
+						case "mapMultiToLong(Ljava/util/function/BiConsumer;)Ljava/util/stream/LongStream;":
+						case "mapMultiToDouble(Ljava/util/function/BiConsumer;)Ljava/util/stream/DoubleStream;":
+						case "takeWhile(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;":
+						case "dropWhile(Ljava/util/function/Predicate;)Ljava/util/stream/Stream;":
+							min.desc = "(Ljava/util/stream/Stream;".concat(min.desc.substring(1));
+							min.setOpcode(Opcodes.INVOKESTATIC);
+						case "ofNullable(Ljava/lang/Object;)Ljava/util/stream/Stream;":
+							min.owner = "com/chocohead/nsn/Streams";
+							min.itf = false;
+							break;
+						}
+						break;
+					}
+
+					case "java/util/concurrent/CompletableFuture": {
+						switch (min.name.concat(min.desc)) {
+						case "exceptionallyAsync(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":
+						case "exceptionallyAsync(Ljava/util/function/Function;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;":
+						case "exceptionallyCompose(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":
+						case "exceptionallyComposeAsync(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":
+						case "exceptionallyComposeAsync(Ljava/util/function/Function;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/CompletableFutures";
+							min.desc = "(Ljava/util/concurrent/CompletableFuture;".concat(min.desc.substring(1));
+							break;
 						}
 						break;
 					}
@@ -724,7 +936,25 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							break;
 
 						case "requireNonNullElseGet(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;":
+						case "checkFromIndexSize(III)I":
 							min.owner = "com/chocohead/nsn/MoreObjects";
+							break;
+						}
+						break;
+					}
+
+					case "java/io/InputStream": {
+						switch (min.name.concat(min.desc)) {
+						case "readNBytes(I)[B":
+							it.previous();
+							it.add(new InsnNode(Opcodes.I2L)); //IOUtils#readAllBytes(InputStream, int) will throw an IOException if the result reads short 
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "com/google/common/io/ByteStreams", "limit", "(Ljava/io/InputStream;J)Ljava/io/InputStream;", false));
+							it.next();
+						case "readAllBytes()[B":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/io/IOUtils";
+							min.name = "toByteArray";
+							min.desc = "(Ljava/io/InputStream;)[B";
 							break;
 						}
 						break;
@@ -776,6 +1006,42 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 						break;
 					}
+
+					case "java/lang/StackWalker": {
+						if ("getCallerClass".equals(min.name) && "()Ljava/lang/Class;".equals(min.desc)) {
+							it.previous();
+							it.add(new InsnNode(Opcodes.POP));
+							it.add(new InsnNode(Opcodes.ICONST_2));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "sun/reflect/Reflection";
+							min.desc = "(I)Ljava/lang/Class;";
+						} else {
+							min.owner = "com/chocohead/nsn/StackWalker";
+							min.desc = min.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker");
+						}
+						break;
+					}
+					}
+					break;
+				}
+
+				case AbstractInsnNode.FIELD_INSN: {
+					FieldInsnNode fin = (FieldInsnNode) insn;
+
+					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker");
+
+					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
+						fin.owner = "com/chocohead/nsn/StackWalker$Option";						
+					}
+					break;
+				}
+
+				case AbstractInsnNode.TYPE_INSN: {
+					TypeInsnNode tin = (TypeInsnNode) insn;
+
+					if ("java/lang/Record".equals(tin.desc)) {
+						tin.desc = "java/lang/Object";
 					}
 					break;
 				}
@@ -783,6 +1049,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			}
 		}
 		node.methods.addAll(extraMethods);
+
+		for (FieldNode field : node.fields) {
+			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker");
+		}
 	}
 
 	private static String prependMem(String to) {
