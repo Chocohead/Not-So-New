@@ -206,6 +206,26 @@ public class Nester {
 					return dotIndex == -1 ? "" : fileName.substring(dotIndex + 1);
 				}
 
+				private boolean skipNewer(Path file, String name) {
+					int packages = 0;
+					for (int pos = name.indexOf('/') + 1; pos > 0; pos = name.indexOf('/', pos) + 1) {
+						packages++;
+					}
+
+					int pathNames = file.getNameCount();
+					int packageOffset = pathNames - packages - 1;
+					if (packageOffset >= 3 && "META-INF".equals(file.getName(packageOffset - 3).toString())
+							&& "versions".equals(file.getName(packageOffset - 2).toString())
+							&& file.subpath(packageOffset, pathNames).toString().replace('\\', '/').startsWith(name)) {
+						try {
+							return Integer.parseInt(file.getName(packageOffset - 1).toString()) > 8;
+						} catch (NumberFormatException e) {
+						}
+					}
+
+					return false;
+				}
+
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
 					if ("class".equalsIgnoreCase(getFileExtension(file))) {
@@ -219,11 +239,12 @@ public class Nester {
 							}
 
 							in.readUnsignedShort(); //Minor version
-							if (in.readUnsignedShort() > Opcodes.V1_8) {
+							out: if (in.readUnsignedShort() > Opcodes.V1_8) {
 								in.reset();
 
 								ClassReader reader = new ClassReader(in);
 								String name = reader.getClassName();
+								if (skipNewer(file, name)) break out;
 								//System.out.println("Planning to transform ".concat(name));
 								reader.accept(checker, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
 
