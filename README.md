@@ -1,5 +1,7 @@
 ## Not So New
-A journey into the future using the past
+*A journey into the future using the past*
+
+This mod makes old Java versions work on newer versions of the game!
 
 ![2021-05-14_19 55 50](https://user-images.githubusercontent.com/4021725/118316429-bbbeec80-b4ee-11eb-9f20-e47b05713a54.png)
 
