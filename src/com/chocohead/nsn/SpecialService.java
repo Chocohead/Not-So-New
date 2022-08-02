@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,6 +25,7 @@ import org.spongepowered.asm.service.IMixinService;
 import org.spongepowered.asm.service.MixinService;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
 
 import com.chocohead.nsn.util.Fields;
 
@@ -153,6 +155,25 @@ public class SpecialService {
 							//Class might not exist?
 							//System.err.println("\tCrashed trying to find it?");
 						}
+					}
+
+					Object storage = Fields.readDeclared(FabricLoader.getInstance(), "entrypointStorage");
+					@SuppressWarnings("unchecked")
+					Map<String, List<Object>> entries = (Map<String, List<Object>>) Fields.readDeclared(storage, "entryMap");
+					List<Object> preLaunchers = entries.get("preLaunch");
+					out: if (preLaunchers.size() > 1) {
+						for (Iterator<?> it = preLaunchers.iterator(); it.hasNext();) {
+							Object preLauncher = it.next();
+							ModContainer mod = (ModContainer) Fields.readDeclared(preLauncher, "mod");
+
+							if ("nsn".equals(mod.getMetadata().getId())) {
+								it.remove();
+								preLaunchers.add(0, preLauncher);
+								break out;
+							}
+						}
+
+						throw new IllegalStateException("Couldn't find the load guard?");
 					}
 				} catch (ReflectiveOperationException | ClassCastException e) {
 					throw new RuntimeException("Failed to unfake Mixin transformer", e);
