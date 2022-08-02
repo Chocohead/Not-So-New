@@ -21,6 +21,9 @@
 	"entrypoints": {
 		"preLaunch": [
 			"com.chocohead.nsn.LoadGuard"
+		],
+		"optifabric:transformer": [
+			"com.chocohead.nsn.OptiFabric"
 		]
 	},
 	"languageAdapters": {
