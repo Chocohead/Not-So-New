@@ -1,7 +1,14 @@
 package com.chocohead.nsn;
 
-import java.io.InputStream;
+import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystemAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -20,12 +27,14 @@ import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.MixinEnvironment.Option;
 import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
 import org.spongepowered.asm.mixin.transformer.ext.IExtensionRegistry;
+import org.spongepowered.asm.service.IClassBytecodeProvider;
 import org.spongepowered.asm.service.IClassTracker;
 import org.spongepowered.asm.service.IMixinService;
 import org.spongepowered.asm.service.MixinService;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.impl.game.GameProvider;
 
 import com.chocohead.nsn.util.Fields;
 
@@ -125,36 +134,119 @@ public class SpecialService {
 					Object delegate = Fields.readDeclared(SpecialService.class.getClassLoader(), "delegate");
 					Fields.writeDeclared(delegate, "transformInitialized", false);
 
+					GameProvider provider = ((net.fabricmc.loader.impl.FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider();
 					@SuppressWarnings("unchecked") //Some would say that it is
-					Map<String, byte[]> patches = (Map<String, byte[]>) Fields.readDeclared(((net.fabricmc.loader.impl.FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider().getEntrypointTransformer(), "patchedClasses");
+					Map<String, byte[]> patches = (Map<String, byte[]>) Fields.readDeclared(provider.getEntrypointTransformer(), "patchedClasses");
 					existingEntrypoints.addAll(patches.keySet());
 
-					for (String name : BulkRemapper.toTransform.getTargets()) {
-						String binaryName = name.replace('/', '.');
-						if (existingEntrypoints.contains(binaryName)) continue; //Avoid replacing the real patches, shouldn't be loading those types before Mixin
+					Path realms = (Path) Fields.readDeclared(provider, "realmsJar");
+					@SuppressWarnings("unchecked")
+					Collection<Path> loggingLibraries = (Collection<Path>) Fields.readDeclared(provider, "logJars");
+					@SuppressWarnings("unchecked")
+					Collection<Path> otherLibraries = (Collection<Path>) Fields.readDeclared(provider, "miscGameLibraries");
+					class DynamicLoader implements Closeable {
+						private final Closeable[] toClose = new Closeable[(realms != null ? 1 : 0) + loggingLibraries.size() + otherLibraries.size()];
+						private final Path[] roots;
 
-						//System.out.println("About to load " + name);
-						try (InputStream in = SpecialService.class.getResourceAsStream('/' + name + ".class")) {
-							if (in != null) {
-								ClassReader reader = new ClassReader(in);
-
-								if (reader.readShort(6) > Opcodes.V1_8) {
-									//System.out.println("\tIt's too new!");
-									ClassNode node = new ClassNode();
-									reader.accept(node, 0);
-
-									BulkRemapper.transform(node);
-									BulkRemapper.toTransform.applyNestTransform(node);
-
-									ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-									node.accept(writer);
-									patches.put(binaryName, writer.toByteArray());
-								}// else System.out.println("\tIt's fine");
-							}// else System.out.println("\tDidn't find it...");
-						} catch (IOException e) {
-							//Class might not exist?
-							//System.err.println("\tCrashed trying to find it?");
+						private Iterable<Path> open(Path jar, int slot) {
+							try {
+								FileSystem fs = FiledSystems.newFileSystem(jar, Collections.emptyMap());
+								toClose[slot] = fs;
+								return fs.getRootDirectories();
+							} catch (FileSystemAlreadyExistsException | IOException e) {
+								throw new RuntimeException("Failed to read library jar at " + jar, e);
+							}
 						}
+
+						public DynamicLoader() {
+							List<Path> paths = new ArrayList<>();
+
+							int slot = 0;
+							if (realms != null) {
+								for (Path root : open(realms, slot++)) paths.add(root);
+							}
+							for (Path loggingLibrary : loggingLibraries) {
+								for (Path root : open(loggingLibrary, slot++)) paths.add(root);
+							}
+							for (Path otherLibrary : otherLibraries) {
+								for (Path root : open(otherLibrary, slot++)) paths.add(root);
+							}
+
+							for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
+								switch (mod.getMetadata().getId()) {
+								case "fabricloader":
+								case "java":
+								case "nsn":
+									break;
+
+								default:
+									paths.addAll(mod.getRootPaths());
+									break;
+								}
+							}
+
+							roots = paths.toArray(new Path[0]);
+						}
+
+						public InputStream getResourceAsStream(String name) throws IOException {
+							for (Path root : roots) {
+								Path out = root.resolve(name);
+								if (Files.exists(out)) return Files.newInputStream(out);
+							}
+
+							return null;
+						}
+
+						@Override
+						public void close() throws IOException {
+							IOException toThrow = null;
+
+							for (Closeable toClose : this.toClose) {
+								try {
+									toClose.close();
+								} catch (IOException e) {
+									if (toThrow == null) {
+										toThrow = e;										
+									} else {
+										toThrow.addSuppressed(e);
+									}
+								}
+							}
+
+							if (toThrow != null) throw toThrow;
+						}
+					}
+					try (DynamicLoader loader = new DynamicLoader()) {
+						for (String name : BulkRemapper.toTransform.getTargets()) {
+							String binaryName = name.replace('/', '.');
+							if (existingEntrypoints.contains(binaryName)) continue; //Avoid replacing the real patches, shouldn't be loading those types before Mixin
+
+							//System.out.println("About to load " + name);
+							try (InputStream in = loader.getResourceAsStream('/' + name + ".class")) {
+								if (in != null) {
+									ClassReader reader = new ClassReader(in);
+
+									if (reader.readShort(6) > Opcodes.V1_8) {
+										//System.out.println("\tIt's too new!");
+										ClassNode node = new ClassNode();
+										reader.accept(node, 0);
+
+										BulkRemapper.transform(node);
+										BulkRemapper.toTransform.applyNestTransform(node);
+
+										ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+										node.accept(writer);
+										patches.put(binaryName, writer.toByteArray());
+									}// else System.out.println("\tIt's fine");
+								} else System.out.println("Didn't find " + name);
+							} catch (IOException e) {
+								//Class might not exist?
+								System.err.println("Crashed trying to find " + name);
+							}
+						}
+					} catch (IOException e) {
+						System.err.println("Error cleaning up temporary loader");
+						e.printStackTrace(); //Shouldn't happen, but not worth crashing over
 					}
 
 					Object storage = Fields.readDeclared(FabricLoader.getInstance(), "entrypointStorage");
@@ -192,10 +284,10 @@ public class SpecialService {
 						if (!existingEntrypoints.contains(name)) patches.remove(name);
 					}
 
+					IClassBytecodeProvider provider = MixinService.getService().getBytecodeProvider();
 					for (String name : extraTransforms) {
-						try (InputStream in = SpecialService.class.getResourceAsStream('/' + name.replace('.', '/') + ".class")) {
-							ClassNode node = new ClassNode();
-							new ClassReader(in).accept(node, 0);
+						try {
+							ClassNode node = provider.getClassNode(name, false);
 							assert node.version > Opcodes.V1_8;
 
 							BulkRemapper.transform(node);
@@ -204,7 +296,7 @@ public class SpecialService {
 							ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 							node.accept(writer);
 							patches.put(name, writer.toByteArray());
-						} catch (IOException e) {
+						} catch (IOException | ClassNotFoundException e) {
 							throw new RuntimeException("Failed to add extra transform for " + name, e);
 						}
 					}
