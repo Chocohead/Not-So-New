@@ -40,6 +40,8 @@ import org.spongepowered.asm.mixin.transformer.ext.Extensions;
 import org.spongepowered.asm.util.Bytecode;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.SemanticVersion;
+import net.fabricmc.loader.api.VersionParsingException;
 
 import com.chocohead.mm.api.ClassTinkerers;
 import com.chocohead.nsn.Nester.ScanResult;
@@ -174,7 +176,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		return true;
+		return !"com.chocohead.nsn.mixins.MainMixin".equals(mixinClassName) || !FabricLoader.getInstance().getModContainer("minecraft").filter(mod -> {
+			try {
+				return SemanticVersion.parse("1.19.1").compareTo(mod.getMetadata().getVersion()) <= 0;
+			} catch (VersionParsingException e) {
+				throw new IllegalStateException("Failed to create valid SemVer?", e);
+			}
+		}).isPresent();
 	}
 
 	@Override
@@ -1019,6 +1027,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						} else {
 							min.owner = "com/chocohead/nsn/StackWalker";
 							min.desc = min.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker");
+						}
+						break;
+					}
+
+					case "java/util/concurrent/TimeUnit": {
+						if ("convert".equals(min.name) && "(Ljava/time/Duration;)J".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/TimeUnits";
+							min.desc = "(Ljava/util/concurrent/TimeUnit;".concat(min.desc.substring(1));
 						}
 						break;
 					}
