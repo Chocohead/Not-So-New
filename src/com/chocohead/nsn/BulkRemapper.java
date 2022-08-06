@@ -48,6 +48,7 @@ import com.chocohead.nsn.Nester.ScanResult;
 
 public class BulkRemapper implements IMixinConfigPlugin {
 	static final Map<String, Set<String>> HUMBLE_INTERFACES = new HashMap<>(64);
+	private static final Map<String, List<Consumer<ClassNode>>> EXTRA_ACCESS = new HashMap<>(4);
 	static ScanResult toTransform = Nester.run();
 
 	@Override
@@ -60,10 +61,17 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				HUMBLE_INTERFACES.computeIfAbsent(target.get(), k -> new HashSet<>(4)).add(entry.getKey());
 			}
 		}
+		for (Entry<List<Supplier<String>>, Consumer<ClassNode>> entry : toTransform.getMixinNestTransforms()) {
+			Consumer<ClassNode> transformer = entry.getValue();
+			for (Supplier<String> target : entry.getKey()) {
+				EXTRA_ACCESS.computeIfAbsent(target.get(), k -> new ArrayList<>(1)).add(transformer);
+			}
+		}
 
 		mixinPackage = mixinPackage.replace('.', '/');
 		generateMixin(mixinPackage.concat("SuperMixin"), toTransform.getMixinTargets());
 		generateMixin(mixinPackage.concat("InterfaceMixin"), HUMBLE_INTERFACES.keySet());
+		generateMixin(mixinPackage.concat("MixinAccessMixin"), EXTRA_ACCESS.keySet());
 
 		for (Entry<String, Consumer<ClassNode>> entry : toTransform.getNestTransforms().entrySet()) {
 			ClassTinkerers.addTransformation(entry.getKey(), entry.getValue());
@@ -191,7 +199,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 	@Override
 	public List<String> getMixins() {
-		return ImmutableList.of("SuperMixin", "InterfaceMixin");
+		return ImmutableList.of("SuperMixin", "InterfaceMixin", "MixinAccessMixin");
 	}
 
 	@Override
@@ -207,6 +215,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 	public void postApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
 		node.interfaces.remove(mixinClassName);
 		if (mixinClassName.endsWith(".SuperMixin")) transform(node);
+		else if (mixinClassName.endsWith("MixinAccessMixin")) {
+			for (Consumer<ClassNode> transformer : EXTRA_ACCESS.get(targetClassName.replace('.', '/'))) {
+				transformer.accept(node);
+			}
+		}
 	}
 
 	static void transform(ClassNode node) {

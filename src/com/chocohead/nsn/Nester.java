@@ -10,6 +10,7 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -38,6 +40,11 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import org.spongepowered.asm.mixin.transformer.ClassInfo;
+import org.spongepowered.asm.mixin.transformer.ClassInfo.Field;
+import org.spongepowered.asm.mixin.transformer.ClassInfo.Method;
+import org.spongepowered.asm.util.Bytecode;
+
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
@@ -49,8 +56,10 @@ public class Nester {
 		final Set<String> toTransform = new HashSet<>(4096);
 		final Set<String> pluginClasses = new HashSet<>(32);
 		final Map<String, List<Supplier<String>>> interfaceTargets = new HashMap<>(64);
-		Map<String, List<ClassReader>> nests = new HashMap<>(128);
+		Map<String, List<Member>> nests = new HashMap<>(128);
+		Map<String, List<MixinMember>> mixinNests = new HashMap<>(8);
 		CompletableFuture<Map<String, Consumer<ClassNode>>> nestTransforms;
+		private CompletableFuture<List<Entry<List<Supplier<String>>, Consumer<ClassNode>>>> mixinNestTransforms;
 
 		ScanResult() {
 		}
@@ -67,22 +76,35 @@ public class Nester {
 			return Collections.unmodifiableMap(interfaceTargets);
 		}
 
+		private static <M extends Member, T, R> CompletableFuture<R> scheduleNesting(Collection<? extends Collection<M>> systems, Function<Collection<M>, T> nester, Function<CompletableFuture<T>[], R> then) {
+			@SuppressWarnings("unchecked") //We'll be careful
+			CompletableFuture<T>[] tasks = new CompletableFuture[systems.size()];
+
+			int i = 0;
+			for (Collection<M> system : systems) {
+				//System.out.println(system.stream().map(Member::getName).collect(Collectors.joining(", ", "Analysing: [", "]")));
+				tasks[i++] = CompletableFuture.<T>supplyAsync(() -> nester.apply(system));
+			}
+
+			return CompletableFuture.allOf(tasks).thenApply(empty -> then.apply(tasks));
+		}
+
 		void calculateNests() {
 			try {
-				resolveNestSystem(Collections.singleton(new ClassReader(Object.class.getName())));
+				resolveNestSystem(Collections.singleton(new Member(new ClassReader(Object.class.getName()))));
 			} catch (IOException e) {
 				//Only warming up for class loading
 			}
-			@SuppressWarnings("unchecked") //We'll be careful
-			CompletableFuture<Map<String, Consumer<ClassNode>>>[] tasks = new CompletableFuture[nests.size()];
+			for (Entry<String, List<MixinMember>> entry : mixinNests.entrySet()) {
+				List<Member> members = nests.remove(entry.getKey());
+				if (members == null) continue; //No non-mixin inner types to rescue
+				List<MixinMember> mixins = entry.getValue();
 
-			int i = 0;
-			for (Collection<ClassReader> system : nests.values()) {
-				//System.out.println(system.stream().map(ClassReader::getClassName).collect(Collectors.joining(", ", "Analysing: [", "]")));
-				tasks[i++] = CompletableFuture.supplyAsync(() -> resolveNestSystem(system));
+				for (Member member : members) {
+					mixins.add(new MixinMember(member));
+				}
 			}
-
-			nestTransforms = CompletableFuture.allOf(tasks).thenApply(empty -> {
+			nestTransforms = scheduleNesting(nests.values(), Nester::resolveNestTransformers, tasks -> {
 				Map<String, Consumer<ClassNode>> out = new HashMap<>();
 
 				for (CompletableFuture<Map<String, Consumer<ClassNode>>> task : tasks) {
@@ -91,27 +113,35 @@ public class Nester {
 
 				return out;
 			});
+			mixinNestTransforms = scheduleNesting(mixinNests.values(), Nester::resolveNestedMixins, tasks -> {
+				List<Entry<List<Supplier<String>>, Consumer<ClassNode>>> out = new ArrayList<>();
+
+				for (CompletableFuture<List<Entry<List<Supplier<String>>, Consumer<ClassNode>>>> task : tasks) {
+					out.addAll(task.join());
+				}
+
+				return out;
+			});
+			mixinNests = null;
 			searchPlugins(nests.values());
 			nests = null;
 		}
 
-		private void searchPlugins(Collection<? extends Collection<ClassReader>> systems) {
+		private void searchPlugins(Collection<? extends Collection<Member>> systems) {
 			Set<String> names = new HashSet<>(8);
 
-			for (Collection<ClassReader> system : systems) {
+			for (Collection<Member> system : systems) {
 				boolean pluginUsed = false;
 
-				for (ClassReader reader : system) {
-					String name = reader.getClassName();
-
+				for (Member member : system) {
 					if (pluginUsed) {
-						pluginClasses.add(name);
-					} else if (pluginClasses.contains(name)) {
+						pluginClasses.add(member.name);
+					} else if (pluginClasses.contains(member.name)) {
 						pluginUsed = true;
 
 						pluginClasses.addAll(names);
 					} else {
-						names.add(name);
+						names.add(member.name);
 					}
 				}
 
@@ -132,6 +162,10 @@ public class Nester {
 			} else {
 				return false;
 			}
+		}
+
+		public List<Entry<List<Supplier<String>>, Consumer<ClassNode>>> getMixinNestTransforms() {
+			return mixinNestTransforms.join();
 		}
 	}
 
@@ -256,10 +290,16 @@ public class Nester {
 									}
 
 									if (checker.inNestedSystem()) {
-										result.nests.computeIfAbsent(checker.isNestHost() ? name : checker.getNestHost(), k -> new ArrayList<>()).add(reader);
+										result.nests.computeIfAbsent(checker.isNestHost() ? name : checker.getNestHost(), k -> new ArrayList<>()).add(new Member(reader));
 									}
-								} else if (Modifier.isInterface(reader.getAccess())) {
-									result.interfaceTargets.computeIfAbsent(name, k -> new ArrayList<>(4)).addAll(checker.getLazyTargets());
+								} else {
+									if (Modifier.isInterface(reader.getAccess())) {
+										result.interfaceTargets.computeIfAbsent(name, k -> new ArrayList<>(4)).addAll(checker.getLazyTargets());
+									}
+
+									if (checker.inNestedSystem()) {
+										result.mixinNests.computeIfAbsent(checker.isNestHost() ? name : checker.getNestHost(), k -> new ArrayList<>()).add(new MixinMember(reader, checker));
+									}
 								}
 
 								checker.reset();
@@ -294,28 +334,58 @@ public class Nester {
 		}
 	}
 
-	private static Map<String, Consumer<ClassNode>> resolveNestSystem(Collection<ClassReader> system) {
-		class Member {
-			public final String name;
-			public final Set<String> methods = new HashSet<>();
-			public final Set<String> usedMethods = new HashSet<>();
-			public final Set<String> fields = new HashSet<>();
-			public final Set<String> usedFields = new HashSet<>();
+	private static class Member {
+		public final ClassReader reader;
+		public final String name;
+		public final Set<String> methods = new HashSet<>();
+		public final Set<String> usedMethods = new HashSet<>();
+		public final Set<String> fields = new HashSet<>();
+		public final Set<String> usedFields = new HashSet<>();
 
-			Member(String name) {
-				this.name = name;
-			}
+		Member(ClassReader reader) {
+			this.reader = reader;
+			this.name = reader.getClassName();
 		}
-		Map<String, Member> ownerToMembers = system.stream().map(ClassReader::getClassName).collect(Collectors.toMap(Function.identity(), Member::new));
 
-		for (ClassReader reader : system) {
-			reader.accept(new ClassVisitor(Opcodes.ASM9) {
-				private Member self;
+		Member(Member member) {
+			this.reader = member.reader;
+			this.name = member.name;
+			methods.addAll(member.methods);
+			usedMethods.addAll(member.usedMethods);
+			fields.addAll(member.fields);
+			usedFields.addAll(member.usedFields);
+		}
 
-				@Override
-				public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
-					self = ownerToMembers.get(name);
-				}
+		public String getName() {
+			return name;
+		}
+	}
+
+	private static class MixinMember extends Member {
+		public final List<Supplier<String>> targets;
+		public final boolean isMixin;
+
+		MixinMember(ClassReader reader, MixinChecker checker) {
+			super(reader);
+
+			isMixin = true;
+			targets = new ArrayList<>(checker.getLazyTargets());
+		}
+
+		MixinMember(Member member) {
+			super(member);
+
+			isMixin = false;
+			targets = Collections.emptyList();
+		}
+	}
+
+	private static void resolveNestSystem(Collection<? extends Member> system) {
+		Map<String, Member> ownerToMembers = system.stream().collect(Collectors.toMap(Member::getName, Function.identity()));
+
+		for (Member member : system) {
+			member.reader.accept(new ClassVisitor(Opcodes.ASM9) {
+				private final Member self = member;
 
 				@Override
 				public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
@@ -366,9 +436,13 @@ public class Nester {
 				}
 			}, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
 		}
+	}
 
-		Map<String, Consumer<ClassNode>> tasks = new HashMap<>(ownerToMembers.size());
-		for (Member member : ownerToMembers.values()) {
+	private static Map<String, Consumer<ClassNode>> resolveNestTransformers(Collection<Member> system) {
+		resolveNestSystem(system);
+
+		Map<String, Consumer<ClassNode>> tasks = new HashMap<>(system.size());
+		for (Member member : system) {
 			Set<String> neededMethods = member.usedMethods;
 			neededMethods.retainAll(member.methods);
 			Set<String> neededFields = member.usedFields;
@@ -395,5 +469,59 @@ public class Nester {
 		}
 
 		return tasks;
+	}
+
+	private static List<Entry<List<Supplier<String>>, Consumer<ClassNode>>> resolveNestedMixins(Collection<MixinMember> system) {
+		resolveNestSystem(system);
+
+		List<Entry<List<Supplier<String>>, Consumer<ClassNode>>> out = new ArrayList<>();
+		for (MixinMember member : system) {
+			Set<String> neededMethods = member.usedMethods;
+			neededMethods.retainAll(member.methods);
+			Set<String> neededFields = member.usedFields;
+			neededFields.retainAll(member.fields);
+			if (neededFields.isEmpty() && neededMethods.isEmpty()) continue;
+ 
+			if (member.isMixin) {
+				String name = member.name; //Capture just the name rather than all of member
+				out.add(new SimpleImmutableEntry<List<Supplier<String>>, Consumer<ClassNode>>(member.targets, node -> {
+					ClassInfo mixin = ClassInfo.forName(name);
+
+					if (!neededMethods.isEmpty()) {
+						for (String neededMethod : neededMethods) {
+							int split = neededMethod.indexOf('(');
+							Method method = mixin.findMethod(neededMethod.substring(0, split), neededMethod.substring(split), ClassInfo.INCLUDE_ALL | ClassInfo.INCLUDE_INITIALISERS);
+							if (method == null) throw new RuntimeException("Unable to find " + neededMethod + " in " + name);
+
+							assert method.getOriginalName().regionMatches(0, neededMethod, 0, split);
+							MethodNode realMethod = Bytecode.findMethod(node, method.getName(), method.getDesc());
+							if (realMethod == null) throw new RuntimeException("Unable to find " + method + " in " + name);
+							realMethod.access = (realMethod.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PROTECTED;
+						}
+					}
+
+					if (!neededFields.isEmpty()) {
+						on: for (String neededField : neededFields) {
+							int split = neededField.indexOf('#');
+							Field field = mixin.findField(neededField.substring(0, split), neededField.substring(split + 1), ClassInfo.INCLUDE_ALL);
+							if (field == null) throw new RuntimeException("Unable to find " + neededField + " in " + name);
+
+							assert field.getOriginalName().regionMatches(0, neededField, 0, split);
+							for (FieldNode realField : node.fields) {
+								if (realField.name.equals(field.getName()) && realField.desc.equals(field.getDesc())) {
+									realField.access = (realField.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PROTECTED;
+									continue on;
+								}
+							}
+							throw new RuntimeException("Unable to find " + field + " in " + name);
+						}
+					}
+				}));
+			} else {//Finding the mangled inner class names is inconvenient, cross the bridge when come to
+				throw new UnsupportedOperationException("Private access in " + member.name + ", fields: " + neededFields + ", methods: " + neededMethods);
+			}
+		}
+
+		return out;
 	}
 }
