@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -25,6 +26,7 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
@@ -758,6 +760,26 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/System": {
+						if ("getLogger".equals(min.name) && "(Ljava/lang/String;)Ljava/lang/System$Logger;".equals(min.desc)) {
+							min.owner = "com/chocohead/nsn/SystemLogger";
+							min.desc = "(Ljava/lang/String;)Lcom/chocohead/nsn/SystemLogger;";
+							min.itf = true;
+						}
+						break;
+					}
+
+					case "java/lang/System$Logger": {
+						min.owner = "com/chocohead/nsn/SystemLogger";
+						min.desc = min.desc.replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
+						break;
+					}
+
+					case "java/lang/System$Logger$Level": {
+						min.owner = "com/chocohead/nsn/SystemLogger$Level";
+						break;
+					}
+
 					case "java/lang/Record": {
 						min.owner = "java/lang/Object";
 						break;
@@ -1058,10 +1080,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				case AbstractInsnNode.FIELD_INSN: {
 					FieldInsnNode fin = (FieldInsnNode) insn;
 
-					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker");
+					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
 						fin.owner = "com/chocohead/nsn/StackWalker$Option";						
+					} else if (fin.owner.startsWith("java/lang/System$Logger")) {
+						fin.owner = fin.owner.replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
 					}
 					break;
 				}
@@ -1080,7 +1104,24 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		node.methods.addAll(extraMethods);
 
 		for (FieldNode field : node.fields) {
-			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker");
+			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
+		}
+
+		for (Iterator<InnerClassNode> it = node.innerClasses.iterator(); it.hasNext();) {
+			InnerClassNode innerClass = it.next();
+
+			switch (innerClass.name) {
+			case "java/lang/System$Logger": {
+				it.remove();
+				break;
+			}
+
+			case "java/lang/System$Logger$Level": {
+				innerClass.name = "com/chocohead/nsn/SystemLogger$Level";
+				innerClass.outerName = "com/chocohead/nsn/SystemLogger";
+				break;
+			}
+			}
 		}
 	}
 
