@@ -16,7 +16,7 @@
 		"nsn.mixins.json"
 	],
 	"license": "MPL-2.0",
-	"icon": "assets/optifabric/icon.png",
+	"icon": "assets/nsn/logo.png",
 	"environment": "*",
 	"entrypoints": {
 		"preLaunch": [
