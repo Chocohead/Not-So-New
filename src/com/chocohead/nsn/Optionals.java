@@ -16,6 +16,10 @@ import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 public class Optionals {
+	public static boolean isEmpty(Optional<?> self) {
+		return !self.isPresent();
+	}
+
 	public static <T> void ifPresentOrElse(Optional<T> self, Consumer<? super T> action, Runnable emptyAction) {
 		if (self.isPresent()) {
 			action.accept(self.get());
@@ -36,6 +40,10 @@ public class Optionals {
 		return self.isPresent() ? Stream.of(self.get()) : Stream.empty();
 	}
 
+	public static boolean isEmpty(OptionalInt self) {
+		return !self.isPresent();
+	}
+
 	public static void ifPresentOrElse(OptionalInt self, IntConsumer action, Runnable emptyAction) {
 		if (self.isPresent()) {
 			action.accept(self.getAsInt());
@@ -48,6 +56,10 @@ public class Optionals {
 		return self.isPresent() ? IntStream.of(self.getAsInt()) : IntStream.empty();
 	}
 
+	public static boolean isEmpty(OptionalLong self) {
+		return !self.isPresent();
+	}
+
 	public static void ifPresentOrElse(OptionalLong self, LongConsumer action, Runnable emptyAction) {
 		if (self.isPresent()) {
 			action.accept(self.getAsLong());
@@ -58,6 +70,10 @@ public class Optionals {
 
 	public static LongStream stream(OptionalLong self) {
 		return self.isPresent() ? LongStream.of(self.getAsLong()) : LongStream.empty();
+	}
+
+	public static boolean isEmpty(OptionalDouble self) {
+		return !self.isPresent();
 	}
 
 	public static void ifPresentOrElse(OptionalDouble self, DoubleConsumer action, Runnable emptyAction) {

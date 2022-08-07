@@ -27,8 +27,6 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
-import org.objectweb.asm.tree.JumpInsnNode;
-import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -516,19 +514,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/util/Optional": {
 						switch (min.name.concat(min.desc)) {
-						case "isEmpty()Z": {
-							min.name = "isPresent";
-							LabelNode present = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
-							it.add(new InsnNode(Opcodes.ICONST_0));
-							LabelNode next = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.GOTO, next));
-							it.add(present);
-							it.add(new InsnNode(Opcodes.ICONST_1));
-							it.add(next);
-							break;
-						}
-
+						case "isEmpty()Z":
 						case "ifPresentOrElse(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V":
 						case "or(Ljava/util/function/Supplier;)Ljava/util/Optional;":
 						case "stream()Ljava/util/stream/Stream;":
@@ -546,19 +532,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/util/OptionalInt": {
 						switch (min.name.concat(min.desc)) {
-						case "isEmpty()Z": {
-							min.name = "isPresent";
-							LabelNode present = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
-							it.add(new InsnNode(Opcodes.ICONST_0));
-							LabelNode next = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.GOTO, next));
-							it.add(present);
-							it.add(new InsnNode(Opcodes.ICONST_1));
-							it.add(next);
-							break;
-						}
-
+						case "isEmpty()Z":
 						case "ifPresentOrElse(Ljava/util/function/IntConsumer;Ljava/lang/Runnable;)V":
 						case "stream()Ljava/util/stream/IntStream;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
@@ -575,19 +549,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/util/OptionalLong": {
 						switch (min.name.concat(min.desc)) {
-						case "isEmpty()Z": {
-							min.name = "isPresent";
-							LabelNode present = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
-							it.add(new InsnNode(Opcodes.ICONST_0));
-							LabelNode next = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.GOTO, next));
-							it.add(present);
-							it.add(new InsnNode(Opcodes.ICONST_1));
-							it.add(next);
-							break;
-						}
-
+						case "isEmpty()Z":
 						case "ifPresentOrElse(Ljava/util/function/LongConsumer;Ljava/lang/Runnable;)V":
 						case "stream()Ljava/util/stream/LongStream;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
@@ -604,19 +566,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/util/OptionalDouble": {
 						switch (min.name.concat(min.desc)) {
-						case "isEmpty()Z": {
-							min.name = "isPresent";
-							LabelNode present = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.IFEQ, present));
-							it.add(new InsnNode(Opcodes.ICONST_0));
-							LabelNode next = new LabelNode();
-							it.add(new JumpInsnNode(Opcodes.GOTO, next));
-							it.add(present);
-							it.add(new InsnNode(Opcodes.ICONST_1));
-							it.add(next);
-							break;
-						}
-
+						case "isEmpty()Z":
 						case "ifPresentOrElse(Ljava/util/function/DoubleConsumer;Ljava/lang/Runnable;)V":
 						case "stream()Ljava/util/stream/DoubleStream;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
