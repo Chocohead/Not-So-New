@@ -916,6 +916,19 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/io/InputStream": {
 						switch (min.name.concat(min.desc)) {
+						case "nullInputStream()Ljava/io/InputStream;": //An inexact replicate in terms of close behaviour, but good enough
+							it.previous();
+							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/NullInputStream"));
+							it.add(new InsnNode(Opcodes.LCONST_0));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESPECIAL);
+							min.owner = "org/apache/commons/io/input/NullInputStream";
+							min.name = "<init>";
+							min.desc = "(JZZ)V";
+							break;
+
 						case "readNBytes(I)[B":
 							it.previous();
 							it.add(new InsnNode(Opcodes.I2L)); //IOUtils#readAllBytes(InputStream, int) will throw an IOException if the result reads short 
@@ -927,6 +940,42 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.name = "toByteArray";
 							min.desc = "(Ljava/io/InputStream;)[B";
 							break;
+						}
+						break;
+					}
+
+					case "java/io/OutputStream": {
+						if ("nullOutputStream".equals(min.name) && "()Ljava/io/OutputStream;".equals(min.desc)) {
+							min.owner = "com/google/common/io/ByteStreams"; //Commons IO also has a NullOutputStream type
+						}
+						break;
+					}
+
+					case "java/io/Reader": {
+						if ("nullReader".equals(min.name) && "()Ljava/io/Reader;".equals(min.desc)) {
+							it.previous();
+							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/NullReader"));
+							it.add(new InsnNode(Opcodes.LCONST_0));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESPECIAL);
+							min.owner = "org/apache/commons/io/input/NullReader";
+							min.name = "<init>";
+							min.desc = "(JZZ)V";
+						}
+						break;
+					}
+
+					case "java/io/Writer": {
+						if ("nullWriter".equals(min.name) && "()Ljava/io/Writer;".equals(min.desc)) {
+							it.previous();
+							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/NullWriter"));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESPECIAL);
+							min.owner = "org/apache/commons/io/input/NullWriter";
+							min.name = "<init>";
+							min.desc = "()V";
 						}
 						break;
 					}
