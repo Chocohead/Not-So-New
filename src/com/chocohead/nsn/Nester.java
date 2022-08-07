@@ -208,6 +208,18 @@ public class Nester {
 		return out;
 	}
 
+	static ScanResult run(Path... paths) {
+		ScanResult out = new ScanResult();
+		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
+
+		for (Path path : paths) {
+			walkLibrary(buffer, path, out);
+		}
+
+		out.calculateNests();
+		return out;
+	}
+
 	private static void walkLibrary(RecyclableDataInputStream buffer, Path jar, ScanResult result) {
 		try (FileSystem fs = FiledSystems.newFileSystem(jar, Collections.emptyMap())) {
 			for (Path root : fs.getRootDirectories()) {
