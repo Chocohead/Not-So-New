@@ -350,6 +350,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								case "stream()Ljava/util/stream/Stream;":
 									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/chocohead/nsn/Optionals", handle.getName(), "(Ljava/util/Optional;".concat(handle.getDesc().substring(1)), false);
 									break;
+
+								case "orElseThrow()Ljava/lang/Object;":
+									idin.bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner(), "get", handle.getDesc(), handle.isInterface());
+									break;
 								}
 								break;
 							}
