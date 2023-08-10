@@ -21,7 +21,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 archivesBaseName = 'NotSoNew'
-version = '5.14'
+version = '5.15'
 
 repositories {
 	maven { 

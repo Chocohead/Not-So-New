@@ -923,6 +923,18 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/Class": {
+						if ("arrayType".equals(min.name) && "()Ljava/lang/Class;".equals(min.desc)) {
+							it.previous();
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/reflect/Array", "newInstance", "(Ljava/lang/Class;I)Ljava/lang/Object;", false));
+							it.next();
+							min.owner = "java/lang/Object";
+							min.name = "getClass";
+						}
+						break;
+					}
+
 					case "java/util/concurrent/CompletableFuture": {
 						switch (min.name.concat(min.desc)) {
 						case "exceptionallyAsync(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":
