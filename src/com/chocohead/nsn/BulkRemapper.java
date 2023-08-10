@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -152,6 +153,21 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 				}
 			}
+		});
+		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_7668"), node -> {
+			MethodVisitor method = node.visitMethod(Opcodes.ACC_PUBLIC, "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;", null, null);
+			method.visitCode();
+			method.visitVarInsn(Opcodes.ALOAD, 0);
+			method.visitVarInsn(Opcodes.ALOAD, 0);
+			method.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/nio/file/Path", "getFileSystem", "()Ljava/nio/file/FileSystem;", true);
+			method.visitVarInsn(Opcodes.ALOAD, 1);
+			method.visitInsn(Opcodes.ICONST_0);
+			method.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/String");
+			method.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/nio/file/FileSystem", "getPath", "(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;", false);
+			method.visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/nio/file/Path", "resolve", "(Ljava/nio/file/Path;)Ljava/nio/file/Path;", true);
+			method.visitInsn(Opcodes.ARETURN);
+			method.visitMaxs(4, 2);
+			method.visitEnd();
 		});
 
 		try {
