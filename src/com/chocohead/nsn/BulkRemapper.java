@@ -249,6 +249,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			if (method.desc.contains("Ljava/lang/Record;")) {
 				method.desc = method.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;");
 			}
+			if (method.desc.contains("Ljava/util/ServiceLoader$Provider;")) {
+				method.desc = method.desc.replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;");
+			}
 
 			for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
 				AbstractInsnNode insn = it.next();
@@ -338,8 +341,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						if (idin.bsmArgs[i] instanceof Handle) {
 							Handle handle = (Handle) idin.bsmArgs[i];
 
-							if (handle.getDesc().contains("Ljava/lang/Record;")) {
-								idin.bsmArgs[i] = handle = new Handle(handle.getTag(), handle.getOwner(), handle.getName(), handle.getDesc().replace("Ljava/lang/Record;", "Ljava/lang/Object;"), handle.isInterface());
+							if (handle.getDesc().contains("Ljava/lang/Record;") || handle.getDesc().contains("Ljava/util/ServiceLoader$Provider;")) {
+								idin.bsmArgs[i] = handle = new Handle(handle.getTag(), handle.getOwner(), handle.getName(),
+										handle.getDesc().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;"), handle.isInterface());
 							}
 
 							switch (handle.getOwner()) {
@@ -391,8 +395,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							switch (type.getSort()) {
 							case Type.OBJECT:
 							case Type.ARRAY:
-								if (type.getDescriptor().contains("Ljava/lang/Record;")) {
-									idin.bsmArgs[i] = Type.getType(type.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;"));
+								if (type.getDescriptor().contains("Ljava/lang/Record;") || type.getDescriptor().contains("Ljava/util/ServiceLoader$Provider;")) {
+									idin.bsmArgs[i] = Type.getType(type.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;"));
 								}
 								break;
 
@@ -403,13 +407,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 								for (int j = 0; j < args.length; j++) {
 									String desc = args[j].getDescriptor();
-									if (desc.contains("Ljava/lang/Record;")) {
-										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;"));
+									if (desc.contains("Ljava/lang/Record;") || desc.contains("Ljava/util/ServiceLoader$Provider;")) {
+										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;"));
 										madeChange = true;
 									}
 								}
-								if (returnType.getDescriptor().contains("Ljava/lang/Record;")) {
-									returnType = Type.getType(returnType.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;"));
+								if (returnType.getDescriptor().contains("Ljava/lang/Record;") || returnType.getDescriptor().contains("Ljava/util/ServiceLoader$Provider;")) {
+									returnType = Type.getType(returnType.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;"));
 									madeChange = true;
 								}
 
@@ -1069,6 +1073,23 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/ServiceLoader": {
+						switch (min.name.concat(min.desc)) {
+						case "findFirst()Ljava/util/Optional;":
+						case "stream()Ljava/util/stream/Stream;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/ServiceLoaders";
+							min.desc = "(Ljava/util/ServiceLoader;".concat(min.desc.substring(1).replace("java/util/ServiceLoader$Provider", "com/chocohead/nsn/ServiceLoaders$Provider"));
+							break;
+						}
+						break;
+					}
+
+					case "java/util/ServiceLoader$Provider": {
+						min.owner = "com/chocohead/nsn/ServiceLoaders$Provider";
+						break;
+					}
+
 					case "java/util/concurrent/TimeUnit": {
 						if ("convert".equals(min.name) && "(Ljava/time/Duration;)J".equals(min.desc)) {
 							min.setOpcode(Opcodes.INVOKESTATIC);
@@ -1097,8 +1118,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				case AbstractInsnNode.TYPE_INSN: {
 					TypeInsnNode tin = (TypeInsnNode) insn;
 
-					if ("java/lang/Record".equals(tin.desc)) {
+					switch (tin.desc) {
+					case "java/lang/Record":
 						tin.desc = "java/lang/Object";
+						break;
+					case "java/util/ServiceLoader$Provider": {
+						tin.desc = "com/chocohead/nsn/ServiceLoaders$Provider";
+						break;
+					}
 					}
 					break;
 				}
@@ -1123,6 +1150,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			case "java/lang/System$Logger$Level": {
 				innerClass.name = "com/chocohead/nsn/SystemLogger$Level";
 				innerClass.outerName = "com/chocohead/nsn/SystemLogger";
+				break;
+			}
+
+			case "java/util/ServiceLoader$Provider": {
+				innerClass.name = "com/chocohead/nsn/ServiceLoaders$Provider";
+				innerClass.outerName = "com/chocohead/nsn/ServiceLoaders";
 				break;
 			}
 			}
