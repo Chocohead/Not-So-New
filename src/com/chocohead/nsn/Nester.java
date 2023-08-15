@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -29,6 +30,8 @@ import java.util.stream.Collectors;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+
+import org.apache.commons.lang3.reflect.FieldUtils;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -40,6 +43,9 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import org.spongepowered.asm.mixin.MixinEnvironment;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
+import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import org.spongepowered.asm.mixin.transformer.ClassInfo;
 import org.spongepowered.asm.mixin.transformer.ClassInfo.Field;
 import org.spongepowered.asm.mixin.transformer.ClassInfo.Method;
@@ -168,6 +174,55 @@ public class Nester {
 			return mixinNestTransforms.join();
 		}
 	}
+	private static final BiPredicate<String, String> IS_MIXIN_LOADED = new BiPredicate<String, String>() {
+		private List<IMixinConfig> configs;
+
+		@SuppressWarnings("unchecked")
+		private void getConfigs() {
+			try {
+				Object transformer = MixinEnvironment.getCurrentEnvironment().getActiveTransformer();
+				if (transformer == null) throw new IllegalStateException("No active transformer?");
+
+				Object processor = FieldUtils.readDeclaredField(transformer, "processor", true);
+				assert processor != null; //Shouldn't manage to get it null
+
+				Object configs = FieldUtils.readDeclaredField(processor, "configs", true);
+				assert configs != null; //Shouldn't manage to be null either
+
+				this.configs = (List<IMixinConfig>) configs;
+			} catch (ReflectiveOperationException | ClassCastException e) {
+				throw new RuntimeException("Failed to get mixin configs", e);
+			}
+		}
+
+		@Override
+		@SuppressWarnings("unchecked")
+		public boolean test(String mixinName, String target) {
+			assert mixinName.indexOf('.') < 0;
+			assert target.indexOf('.') < 0;
+			if (configs == null) getConfigs();
+
+			for (IMixinConfig config : configs) {
+				if (mixinName.startsWith(config.getMixinPackage())) {
+					List<IMixinInfo> mixins;
+					try {
+						mixins = (List<IMixinInfo>) FieldUtils.readDeclaredField(config, "mixins", true);
+					} catch (ReflectiveOperationException | ClassCastException e) {
+						throw new RuntimeException("Failed to get mixins from config " + config, e);
+					}
+
+					for (IMixinInfo mixin : mixins) {
+						if (mixinName.equals(mixin.getClassRef())) {
+							assert mixin.getTargetClasses().stream().allMatch(name -> name.indexOf('.') < 0);
+							return mixin.getTargetClasses().contains(target);
+						}
+					}
+				}
+			}
+
+			return false; //No config owns the mixin, so it won't ever be loaded
+		}
+	};
 
 	static ScanResult run() {
 		ScanResult out = new ScanResult();
@@ -507,7 +562,10 @@ public class Nester {
 
 							assert method.getOriginalName().regionMatches(0, neededMethod, 0, split);
 							MethodNode realMethod = Bytecode.findMethod(node, method.getName(), method.getDesc());
-							if (realMethod == null) throw new RuntimeException("Unable to find " + method + " in " + name);
+							if (realMethod == null) {
+								if (!IS_MIXIN_LOADED.test(mixin.getName(), node.name)) break;
+								throw new RuntimeException("Unable to find " + method + " in " + name);
+							}
 							realMethod.access = (realMethod.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PROTECTED;
 						}
 					}
@@ -525,6 +583,7 @@ public class Nester {
 									continue on;
 								}
 							}
+							if (!IS_MIXIN_LOADED.test(mixin.getName(), node.name)) break;
 							throw new RuntimeException("Unable to find " + field + " in " + name);
 						}
 					}
