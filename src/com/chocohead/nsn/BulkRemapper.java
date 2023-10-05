@@ -388,6 +388,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "java/util/Collections", "singletonList", handle.getDesc(), false);
 									break;
 
+								case "of([Ljava/lang/Object;)Ljava/util/List;":
+									handle = new Handle(handle.getTag(), handle.getOwner(), "copyOf", handle.getDesc(), handle.isInterface());
 								case "copyOf(Ljava/util/Collection;)Ljava/util/List;":
 									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/google/common/collect/ImmutableList", handle.getName(),
 											handle.getDesc().substring(0, handle.getDesc().length() - 15).concat("com/google/common/collect/ImmutableList;"), false);
