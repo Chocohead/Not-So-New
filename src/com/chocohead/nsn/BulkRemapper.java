@@ -628,6 +628,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/function/Predicate": {
+						if ("not".equals(min.name) && "(Ljava/util/function/Predicate;)Ljava/util/function/Predicate;".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKEINTERFACE);
+							min.name = "negate";
+							min.desc = "()Ljava/util/function/Predicate;";
+						}
+						break;
+					}
+
 					case "java/util/Collection": {
 						if ("toArray".equals(min.name) && "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(min.desc)) {
 							doToArray(it, min);
