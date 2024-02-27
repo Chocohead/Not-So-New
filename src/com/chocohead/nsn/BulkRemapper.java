@@ -168,6 +168,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			method.visitInsn(Opcodes.ARETURN);
 			method.visitMaxs(4, 2);
 			method.visitEnd();
+
+			method = node.visitMethod(Opcodes.ACC_PUBLIC, "iterator", "()Ljava/util/Iterator;", "()Ljava/util/Iterator<Ljava/nio/file/Path;>;", null);
+			method.visitCode();
+			method.visitTypeInsn(Opcodes.NEW, "com/chocohead/nsn/PathIterator");
+			method.visitInsn(Opcodes.DUP);
+			method.visitVarInsn(Opcodes.ALOAD, 0);
+			method.visitMethodInsn(Opcodes.INVOKESPECIAL, "com/chocohead/nsn/PathIterator", "<init>", "(Ljava/nio/file/Path;)V", false);
+			method.visitInsn(Opcodes.ARETURN);
+			method.visitMaxs(2, 2);
+			method.visitEnd();
 		});
 
 		try {
