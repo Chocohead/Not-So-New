@@ -946,8 +946,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/concurrent/atomic/AtomicReference": {
-						if ("setPlain".equals(min.name) && "(Ljava/lang/Object;)V".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "getPlain()Ljava/lang/Object;":
+							min.name = "get";
+							break;
+						case "setPlain(Ljava/lang/Object;)V":
 							min.name = "set";
+							break;
 						}
 						break;
 					}
