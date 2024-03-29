@@ -53,6 +53,7 @@ import org.spongepowered.asm.util.Bytecode;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.ModOrigin.Kind;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
 
 import com.chocohead.nsn.util.Fields;
@@ -226,6 +227,7 @@ public class Nester {
 
 	static ScanResult run() {
 		ScanResult out = new ScanResult();
+		Set<Path> seen = new HashSet<>();
 		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
 
 		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
@@ -236,6 +238,9 @@ public class Nester {
 				break;
 
 			default:
+				if (mod.getOrigin().getKind() == Kind.PATH) {
+					seen.addAll(mod.getOrigin().getPaths());
+				}
 				for (Path root : mod.getRootPaths()) {
 					walkTree(buffer, root, out);
 				}
@@ -246,12 +251,14 @@ public class Nester {
 			@SuppressWarnings("unchecked")
 			Set<Path> logLibraries = (Set<Path>) Fields.readDeclared(((FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider(), "logJars");
 			for (Path library : logLibraries) {
+				if (!seen.add(library)) continue;
 				walkLibrary(buffer, library, out);
 			}
 
 			@SuppressWarnings("unchecked")
 			List<Path> libraries = (List<Path>) Fields.readDeclared(((FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider(), "miscGameLibraries");
 			for (Path library : libraries) {
+				if (!seen.add(library)) continue;
 				walkLibrary(buffer, library, out);
 			}
 		} catch (ReflectiveOperationException e) {
@@ -425,6 +432,11 @@ public class Nester {
 
 		public String getName() {
 			return name;
+		}
+
+		@Override
+		public String toString() {
+			return getClass().getName() + '[' + name + ']';
 		}
 	}
 
