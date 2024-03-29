@@ -731,6 +731,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/StringBuilder": {
+						if ("isEmpty".equals(min.name) && "()Z".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/lang3/StringUtils";
+							min.desc = "(Ljava/lang/CharSequence;)Z";
+						}
+						break;
+					}
+
 					case "java/lang/String": {
 						switch (min.name.concat(min.desc)) {
 						case "strip()Ljava/lang/String;":
