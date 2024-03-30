@@ -98,7 +98,7 @@ public class Nester {
 
 		void calculateNests() {
 			try {
-				resolveNestSystem(Collections.singleton(new Member(new ClassReader(Object.class.getName()))));
+				resolveNestSystem(Collections.singleton(new Member(new ClassReader(Object.class.getName()))), MemberInclusionFilter.DEFAULT);
 			} catch (IOException e) {
 				//Only warming up for class loading
 			}
@@ -459,23 +459,29 @@ public class Nester {
 		}
 	}
 
-	private static void resolveNestSystem(Collection<? extends Member> system) {
-		Map<String, Member> ownerToMembers = system.stream().collect(Collectors.toMap(Member::getName, Function.identity()));
+	private interface MemberInclusionFilter<M extends Member> {
+		MemberInclusionFilter<Member> DEFAULT = (member, access) -> Modifier.isPrivate(access);
 
-		for (Member member : system) {
+		boolean test(M member, int access);
+	}
+
+	private static <M extends Member> void resolveNestSystem(Collection<M> system, MemberInclusionFilter<? super M> inclusionFilter) {
+		Map<String, M> ownerToMembers = system.stream().collect(Collectors.toMap(Member::getName, Function.identity()));
+
+		for (M member : system) {
 			member.reader.accept(new ClassVisitor(Opcodes.ASM9) {
-				private final Member self = member;
+				private final M self = member;
 
 				@Override
 				public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
-					if (Modifier.isPrivate(access)) self.fields.add(name + '#' + descriptor);
+					if (inclusionFilter.test(self, access)) self.fields.add(name + '#' + descriptor);
 
 					return null;
 				}
 
 				@Override
 				public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-					if (Modifier.isPrivate(access)) self.methods.add(name.concat(descriptor));
+					if (inclusionFilter.test(self, access)) self.methods.add(name.concat(descriptor));
 
 					return new MethodVisitor(api) {
 						private void visitMethod(String owner, String name, String descriptor) {
@@ -518,7 +524,7 @@ public class Nester {
 	}
 
 	private static Map<String, Consumer<ClassNode>> resolveNestTransformers(Collection<Member> system) {
-		resolveNestSystem(system);
+		resolveNestSystem(system, MemberInclusionFilter.DEFAULT);
 
 		Map<String, Consumer<ClassNode>> tasks = new HashMap<>(system.size());
 		for (Member member : system) {
@@ -551,7 +557,7 @@ public class Nester {
 	}
 
 	private static List<Entry<List<Supplier<String>>, Consumer<ClassNode>>> resolveNestedMixins(Collection<MixinMember> system) {
-		resolveNestSystem(system);
+		resolveNestSystem(system, (member, access) -> Modifier.isPrivate(access) || member.isMixin);
 
 		List<Entry<List<Supplier<String>>, Consumer<ClassNode>>> out = new ArrayList<>();
 		for (MixinMember member : system) {
@@ -578,7 +584,9 @@ public class Nester {
 								if (!IS_MIXIN_LOADED.test(mixin.getName(), node.name)) break;
 								throw new RuntimeException("Unable to find " + method + " in " + name);
 							}
-							realMethod.access = (realMethod.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PROTECTED;
+							if (Modifier.isPrivate(realMethod.access)) {//If the method is shadowed, the real method might be accessible all along
+								realMethod.access = (realMethod.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PROTECTED;
+							}
 						}
 					}
 
@@ -591,7 +599,9 @@ public class Nester {
 							assert field.getOriginalName().regionMatches(0, neededField, 0, split);
 							for (FieldNode realField : node.fields) {
 								if (realField.name.equals(field.getName()) && realField.desc.equals(field.getDesc())) {
-									realField.access = (realField.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PROTECTED;
+									if (Modifier.isPrivate(realField.access)) {//Ditto for shadowed fields
+										realField.access = (realField.access & ~Opcodes.ACC_PRIVATE) | Opcodes.ACC_PROTECTED;
+									}
 									continue on;
 								}
 							}
