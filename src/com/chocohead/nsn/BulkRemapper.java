@@ -994,6 +994,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/util/concurrent/CompletableFuture": {
 						switch (min.name.concat(min.desc)) {
+						case "failedFuture(Ljava/lang/Throwable;)Ljava/util/concurrent/CompletableFuture;":
+							min.owner = "com/chocohead/nsn/CompletableFutures";
+							break;
+
+						case "orTimeout(JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/CompletableFuture;":
+						case "completeOnTimeout(Ljava/lang/Object;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/CompletableFuture;":
 						case "exceptionallyAsync(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":
 						case "exceptionallyAsync(Ljava/util/function/Function;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;":
 						case "exceptionallyCompose(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":

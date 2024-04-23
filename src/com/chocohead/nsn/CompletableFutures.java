@@ -3,13 +3,53 @@ package com.chocohead.nsn;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 public class CompletableFutures {
+	private static class Timer {
+		private static final ScheduledThreadPoolExecutor POOL = new ScheduledThreadPoolExecutor(1, task -> {
+			Thread out = new Thread(task, "CompletableFuturesTimerPool");
+			out.setDaemon(true);
+			return out;
+		});
+		static {
+			POOL.setRemoveOnCancelPolicy(true);
+		}
+
+		static ScheduledFuture<?> start(Runnable command, long time, TimeUnit unit) {
+			return POOL.schedule(command, time, unit);
+		}
+	}
+
 	public static <T> CompletableFuture<T> failedFuture(Throwable e) {
 		CompletableFuture<T> out = new CompletableFuture<>();
 		out.completeExceptionally(e);
 		return out;
+	}
+
+	public static <T> CompletableFuture<T> orTimeout(CompletableFuture<T> self, long timeout, TimeUnit unit) {
+		return raceTimer(self, () -> {
+			if (!self.isDone()) self.completeExceptionally(new TimeoutException());
+		}, timeout, unit);
+	}
+
+	public static <T> CompletableFuture<T> completeOnTimeout(CompletableFuture<T> self, T value, long timeout, TimeUnit unit) {
+		return raceTimer(self, () -> self.complete(value), timeout, unit);
+	}
+
+	private static <T> CompletableFuture<T> raceTimer(CompletableFuture<T> self, Runnable timedAction, long timeout, TimeUnit unit) {
+		if (!self.isDone()) {
+			ScheduledFuture<?> timer = Timer.start(timedAction, timeout, unit);
+			self.whenComplete((result, e) -> {
+				if (e == null && !timer.isDone()) timer.cancel(false);
+			});
+		}
+
+		return self;
 	}
 
 	public static <T> CompletableFuture<T> exceptionallyAsync(CompletableFuture<T> self, Function<Throwable, ? extends T> action) {
