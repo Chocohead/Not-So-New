@@ -1101,6 +1101,27 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/nio/channels/Channels": {
+						switch (min.name.concat(min.desc)) {
+						case "newReader(Ljava/nio/channels/ReadableByteChannel;Ljava/nio/charset/Charset;)Ljava/io/Reader;":
+							it.previous();
+							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/nio/charset/Charset", "newDecoder", "()Ljava/nio/charset/CharsetDecoder;", false));
+							it.add(new InsnNode(Opcodes.ICONST_M1));
+							it.next();
+							min.desc = "(Ljava/nio/channels/ReadableByteChannel;Ljava/nio/charset/CharsetDecoder;I)Ljava/io/Reader;";
+							break;
+
+						case "newWriter(Ljava/nio/channels/WritableByteChannel;Ljava/nio/charset/Charset;)Ljava/io/Writer;":
+							it.previous();
+							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/nio/charset/Charset", "newEncoder", "()Ljava/nio/charset/CharsetEncoder;", false));
+							it.add(new InsnNode(Opcodes.ICONST_M1));
+							it.next();
+							min.desc = "(Ljava/nio/channels/WritableByteChannel;Ljava/nio/charset/CharsetEncoder;I)Ljava/io/Writer;";
+							break;
+						}
+						break;
+					}
+
 					case "java/nio/file/Files": {
 						switch (min.name.concat(min.desc)) {
 						case "writeString(Ljava/nio/file/Path;Ljava/lang/CharSequence;[Ljava/nio/file/OpenOption;)Ljava/nio/file/Path;":
@@ -1178,6 +1199,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/util/ServiceLoader$Provider": {
 						min.owner = "com/chocohead/nsn/ServiceLoaders$Provider";
+						break;
+					}
+
+					case "java/time/Duration": {
+						if ("toSeconds".equals(min.name) && "()J".equals(min.desc)) {
+							min.name = "getSeconds";
+						}
 						break;
 					}
 
