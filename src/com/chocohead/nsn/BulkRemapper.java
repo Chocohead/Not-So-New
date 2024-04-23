@@ -278,6 +278,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			if (method.desc.contains("Ljava/util/ServiceLoader$Provider;")) {
 				method.desc = method.desc.replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;");
 			}
+			if (method.desc.contains("Ljava/util/SequencedCollection;")) {
+				method.desc = method.desc.replace("Ljava/util/SequencedCollection;", "Ljava/util/Collection;");
+			}
 
 			for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
 				AbstractInsnNode insn = it.next();
@@ -724,7 +727,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
-					case "com/google/common/collect/ImmutableList": {
+					case "com/google/common/collect/ImmutableList":
+					case "com/google/common/collect/ImmutableSet":
+					case "it/unimi/dsi/fastutil/objects/ReferenceOpenHashSet": {
 						if ("toArray".equals(min.name) && "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(min.desc)) {
 							doToArray(it, min);
 						}
@@ -846,6 +851,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/lang/Record": {
 						min.owner = "java/lang/Object";
+						break;
+					}
+
+					case "java/lang/MatchException": {
+						min.owner = "com/chocohead/nsn/MatchException";
+						method.desc = method.desc.replace("Ljava/lang/MatchException;", "Lcom/chocohead/nsn/MatchException;");
 						break;
 					}
 
@@ -1206,6 +1217,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						tin.desc = "com/chocohead/nsn/ServiceLoaders$Provider";
 						break;
 					}
+					case "java/lang/MatchException":
+						tin.desc = "com/chocohead/nsn/MatchException";
+						break;
 					}
 					break;
 				}
