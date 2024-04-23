@@ -6,6 +6,12 @@ import java.util.concurrent.Executor;
 import java.util.function.Function;
 
 public class CompletableFutures {
+	public static <T> CompletableFuture<T> failedFuture(Throwable e) {
+		CompletableFuture<T> out = new CompletableFuture<>();
+		out.completeExceptionally(e);
+		return out;
+	}
+
 	public static <T> CompletableFuture<T> exceptionallyAsync(CompletableFuture<T> self, Function<Throwable, ? extends T> action) {
 		return self.handle((result, e) -> e == null ? self : self.<T>handleAsync((innerResult, innerE) -> action.apply(innerE))).thenCompose(Function.identity());
 	}

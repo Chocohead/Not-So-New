@@ -281,6 +281,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			if (method.desc.contains("Ljava/util/SequencedCollection;")) {
 				method.desc = method.desc.replace("Ljava/util/SequencedCollection;", "Ljava/util/Collection;");
 			}
+			if (method.desc.contains("Ljava/net/http/")) {
+				method.desc = method.desc.replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/");
+			}
 
 			for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
 				AbstractInsnNode insn = it.next();
@@ -1280,6 +1283,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				innerClass.outerName = "com/chocohead/nsn/ServiceLoaders";
 				break;
 			}
+
+			default:
+				if (innerClass.name.contains("java/net/http/")) {
+					innerClass.name = innerClass.name.replace("java/net/http/", "com/chocohead/nsn/http/");
+					innerClass.outerName = innerClass.outerName.replace("java/net/http/", "com/chocohead/nsn/http/");
+				}
 			}
 		}
 	}
