@@ -499,6 +499,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.desc = "(Ljava/nio/ByteBuffer;".concat(min.desc.substring(1));
 							break;
 
+						case "get(I[B)Ljava/nio/ByteBuffer;":
+						case "get(I[BII)Ljava/nio/ByteBuffer;":
 						case "put(ILjava/nio/ByteBuffer;II)Ljava/nio/ByteBuffer;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "com/chocohead/nsn/Buffers";
@@ -558,9 +560,81 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/zip/Inflater": {
+						switch (min.name.concat(min.desc)) {
+						case "setInput([B)V":
+							it.previous();
+							it.add(new InsnNode(Opcodes.DUP2)); //Or SWAP
+							it.add(new InsnNode(Opcodes.POP)); //DUP_X1
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "com/chocohead/nsn/Inflaters", "clearWatch", "(Ljava/util/zip/Inflater;)V", false));
+							it.next();
+							break;
+
+						case "setInput([BII)V":
+							it.previous();
+							it.add(new InsnNode(Opcodes.DUP2_X2));
+							it.add(new InsnNode(Opcodes.POP2));
+							it.add(new InsnNode(Opcodes.DUP2_X2));
+							it.add(new InsnNode(Opcodes.POP));
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "com/chocohead/nsn/Inflaters", "clearWatch", "(Ljava/util/zip/Inflater;)V", false));
+							it.next();
+							break;
+
+						case "setInput(Ljava/nio/ByteBuffer;)V":
+						case "getRemaining()I":
+						case "needsInput()Z":
+						case "inflate([B)I":
+						case "inflate([BII)I":
+						case "inflate(Ljava/nio/ByteBuffer;)I":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Inflaters";
+							min.desc = "(Ljava/util/zip/Inflater;".concat(min.desc.substring(1));
+							break;
+
+						case "reset()V":
+						case "end()V":
+							it.previous();
+							it.add(new InsnNode(Opcodes.DUP));
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "com/chocohead/nsn/Inflaters", "clearWatch", "(Ljava/util/zip/Inflater;)V", false));
+							it.next();
+							break;
+						}
+						break;
+					}
+
 					case "java/lang/Math": {
-						if ("floorMod".equals(min.name) && "(JI)I".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "floorMod(JI)I":
 							min.owner = "com/chocohead/nsn/Maths";
+							break;
+
+						case "clamp(JII)I":
+							it.previous();
+							it.add(new InsnNode(Opcodes.DUP2_X2));
+							it.add(new InsnNode(Opcodes.POP2));
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "com/google/common/primitives/Ints", "saturatedCast", "(J)I", false));
+							it.add(new InsnNode(Opcodes.DUP_X2));
+							it.add(new InsnNode(Opcodes.POP));
+							it.next();
+							min.owner = "com/google/common/primitives/Ints";
+							min.name = "constrainToRange";
+							min.desc = "(III)I";
+							break;
+
+						case "clamp(JJJ)J":
+							min.owner = "com/google/common/primitives/Longs";
+							min.name = "constrainToRange";
+							break;
+
+						case "clamp(DDD)D":
+							min.owner = "com/google/common/primitives/Doubles";
+							min.name = "constrainToRange";
+							break;
+
+						case "clamp(FFF)F":
+							min.owner = "com/google/common/primitives/Floats";
+							min.name = "constrainToRange";
+							break;
 						}
 						break;
 					}
@@ -968,6 +1042,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/stream/IntStream": {
+						if ("iterate".equals(min.name) && "(ILjava/util/function/IntPredicate;Ljava/util/function/IntUnaryOperator;)Ljava/util/stream/IntStream;".equals(min.desc)) {
+							min.owner = "com/chocohead/nsn/Streams";
+							min.itf = false;
+						}
+						break;
+					}
+
 					case "java/util/concurrent/atomic/AtomicReference": {
 						switch (min.name.concat(min.desc)) {
 						case "getPlain()Ljava/lang/Object;":
@@ -1069,6 +1151,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.owner = "org/apache/commons/io/IOUtils";
 							min.name = "toByteArray";
 							min.desc = "(Ljava/io/InputStream;)[B";
+							break;
+
+						case "transferTo(Ljava/io/OutputStream;)J":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/io/IOUtils";
+							min.name = "copyLarge";
+							min.desc = "(Ljava/io/InputStream;Ljava/io/OutputStream;)J";
 							break;
 						}
 						break;

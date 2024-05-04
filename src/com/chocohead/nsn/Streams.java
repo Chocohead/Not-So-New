@@ -1,10 +1,14 @@
 package com.chocohead.nsn;
 
 import java.util.Objects;
+import java.util.Spliterator;
+import java.util.Spliterators.AbstractIntSpliterator;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.DoubleConsumer;
 import java.util.function.IntConsumer;
+import java.util.function.IntPredicate;
+import java.util.function.IntUnaryOperator;
 import java.util.function.LongConsumer;
 import java.util.function.Predicate;
 import java.util.stream.DoubleStream;
@@ -12,6 +16,7 @@ import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 import java.util.stream.Stream.Builder;
+import java.util.stream.StreamSupport;
 
 public class Streams {
 	public static <T> Stream<T> ofNullable(T thing) {
@@ -76,5 +81,25 @@ public class Streams {
 				return hasMatched || (hasMatched = !predicate.test(element));
 			}
 		});
+	}
+
+	public static IntStream iterate(int seed, IntPredicate hasNext, IntUnaryOperator generator) {
+		return StreamSupport.intStream(new AbstractIntSpliterator(Long.MAX_VALUE, Spliterator.ORDERED | Spliterator.IMMUTABLE | Spliterator.NONNULL) {
+			private final OfInt stream = IntStream.iterate(seed, generator).spliterator();
+			private boolean complete;
+
+			@Override
+			public boolean tryAdvance(IntConsumer action) {
+				if (complete) return false;
+				stream.tryAdvance((int value) -> {
+					if (!hasNext.test(value)) {
+						complete = true;
+					} else {
+						action.accept(value);
+					}
+				});
+				return !complete;
+			}
+		}, false);
 	}
 }
