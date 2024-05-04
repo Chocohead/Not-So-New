@@ -495,7 +495,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "duplicate()Ljava/nio/ByteBuffer;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "org/lwjgl/system/MemoryUtil";
-					        min.name = prependMem(min.name);
+							min.name = prependMem(min.name);
 							min.desc = "(Ljava/nio/ByteBuffer;".concat(min.desc.substring(1));
 							break;
 
@@ -528,7 +528,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "duplicate()Ljava/nio/FloatBuffer;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "org/lwjgl/system/MemoryUtil";
-					        min.name = prependMem(min.name);
+							min.name = prependMem(min.name);
 							min.desc = "(Ljava/nio/FloatBuffer;".concat(min.desc.substring(1));
 							break;
 						}
@@ -553,7 +553,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "duplicate()Ljava/nio/IntBuffer;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "org/lwjgl/system/MemoryUtil";
-					        min.name = prependMem(min.name);
+							min.name = prependMem(min.name);
 							min.desc = "(Ljava/nio/IntBuffer;".concat(min.desc.substring(1));
 							break;
 						}
@@ -1392,12 +1392,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		int len = to.length();
 		char[] out = new char[len + 3];
 
-        out[0] = out[2] = 'm';
-        out[1] = 'e';
-        out[3] = Character.toTitleCase(to.charAt(0));
-        to.getChars(1, len, out, 4);
+		out[0] = out[2] = 'm';
+		out[1] = 'e';
+		out[3] = Character.toTitleCase(to.charAt(0));
+		to.getChars(1, len, out, 4);
 
-        return String.valueOf(out);		
+		return String.valueOf(out);
 	}
 
 	private static void doToArray(ListIterator<AbstractInsnNode> it, MethodInsnNode min) {
