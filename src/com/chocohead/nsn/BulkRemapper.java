@@ -759,6 +759,34 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;":
 							doToArray(it, min);
 							break;
+
+						case "addFirst(Ljava/lang/Object;)V":
+							it.previous();
+							it.add(new InsnNode(Opcodes.ICONST_0));
+							it.add(new InsnNode(Opcodes.SWAP));
+							it.next();
+							min.desc = "(ILjava/lang/Object;)V";
+						case "addLast(Ljava/lang/Object;)V":
+							min.name = "add";
+							break;
+
+						case "getFirst()Ljava/lang/Object;":
+						case "getLast()Ljava/lang/Object;":
+						case "removeFirst()Ljava/lang/Object;":
+						case "removeLast()Ljava/lang/Object;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Lists";
+							min.desc = "(Ljava/util/List;".concat(min.desc.substring(1));
+							min.itf = false;
+							break;
+
+						case "reversed()Ljava/util/List;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/google/common/collect/Lists";
+							min.name = "reverse";
+							min.desc = "(Ljava/util/List;)Ljava/util/List;";
+							min.itf = false;
+							break;
 						}
 						break;
 					}
@@ -1239,6 +1267,19 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "newFileSystem(Ljava/nio/file/Path;Ljava/util/Map;Ljava/lang/ClassLoader;)Ljava/nio/file/FileSystem;":
 							min.owner = "com/chocohead/nsn/FiledSystems";
 							break;
+						}
+						break;
+					}
+
+					case "java/lang/IndexOutOfBoundsException": {
+						if ("<init>".equals(min.name) && "(I)V".equals(min.desc)) {
+							it.previous();
+							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Integer", "toString", "(I)Ljava/lang/String;", false));
+							it.add(new LdcInsnNode("Index out of range: "));
+							it.add(new InsnNode(Opcodes.SWAP));
+							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;", false));
+							it.hasNext();
+							min.desc = "(Ljava/lang/String;)V";
 						}
 						break;
 					}
