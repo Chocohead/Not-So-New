@@ -1278,7 +1278,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.add(new LdcInsnNode("Index out of range: "));
 							it.add(new InsnNode(Opcodes.SWAP));
 							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;", false));
-							it.hasNext();
+							it.next();
 							min.desc = "(Ljava/lang/String;)V";
 						}
 						break;
