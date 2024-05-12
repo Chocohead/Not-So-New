@@ -773,38 +773,25 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.itf = false;
 							break;
 
-						case "toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;":
-							doToArray(it, min);
-							break;
-
-						case "addFirst(Ljava/lang/Object;)V":
-							it.previous();
-							it.add(new InsnNode(Opcodes.ICONST_0));
-							it.add(new InsnNode(Opcodes.SWAP));
-							it.next();
-							min.desc = "(ILjava/lang/Object;)V";
-						case "addLast(Ljava/lang/Object;)V":
-							min.name = "add";
-							break;
-
-						case "getFirst()Ljava/lang/Object;":
-						case "getLast()Ljava/lang/Object;":
-						case "removeFirst()Ljava/lang/Object;":
-						case "removeLast()Ljava/lang/Object;":
-							min.setOpcode(Opcodes.INVOKESTATIC);
-							min.owner = "com/chocohead/nsn/Lists";
-							min.desc = "(Ljava/util/List;".concat(min.desc.substring(1));
-							min.itf = false;
-							break;
-
-						case "reversed()Ljava/util/List;":
-							min.setOpcode(Opcodes.INVOKESTATIC);
-							min.owner = "com/google/common/collect/Lists";
-							min.name = "reverse";
-							min.desc = "(Ljava/util/List;)Ljava/util/List;";
-							min.itf = false;
+						default:
+							doListSequencedCollection(it, min);
 							break;
 						}
+						break;
+					}
+
+					case "com/google/common/collect/ImmutableList": {
+						if ("reversed".equals(min.name) && "()Ljava/util/List;".equals(min.desc)) {
+							min.name = "reverse";
+							min.desc = "()Lcom/google/common/collect/ImmutableList;";
+						} else {
+							doListSequencedCollection(it, min);
+						}
+						break;
+					}
+
+					case "it/unimi/dsi/fastutil/objects/ObjectList": {
+						doListSequencedCollection(it, min);
 						break;
 					}
 
@@ -849,7 +836,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
-					case "com/google/common/collect/ImmutableList":
 					case "com/google/common/collect/ImmutableSet":
 					case "it/unimi/dsi/fastutil/objects/ReferenceOpenHashSet": {
 						if ("toArray".equals(min.name) && "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(min.desc)) {
@@ -1103,6 +1089,20 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "setPlain(Ljava/lang/Object;)V":
 							min.name = "set";
 							break;
+						case "compareAndExchange(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Atomics";
+							min.desc = "(Ljava/util/concurrent/atomic/AtomicReference;".concat(min.desc.substring(1));
+							break;
+						}
+						break;
+					}
+
+					case "java/util/concurrent/atomic/AtomicReferenceArray": {
+						if ("compareAndExchange".equals(min.name) && "(ILjava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Atomics";
+							min.desc = "(Ljava/util/concurrent/atomic/AtomicReferenceArray;".concat(min.desc.substring(1));
 						}
 						break;
 					}
@@ -1465,5 +1465,41 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		it.add(new TypeInsnNode(Opcodes.CHECKCAST, "[Ljava/lang/Object;"));
 		it.next();
 		min.desc = "([Ljava/lang/Object;)[Ljava/lang/Object;";
+	}
+
+	private static void doListSequencedCollection(ListIterator<AbstractInsnNode> it, MethodInsnNode min) {
+		switch (min.name.concat(min.desc)) {
+		case "toArray(Ljava/util/function/IntFunction;)[Ljava/lang/Object;":
+			doToArray(it, min);
+			break;
+
+		case "addFirst(Ljava/lang/Object;)V":
+			it.previous();
+			it.add(new InsnNode(Opcodes.ICONST_0));
+			it.add(new InsnNode(Opcodes.SWAP));
+			it.next();
+			min.desc = "(ILjava/lang/Object;)V";
+		case "addLast(Ljava/lang/Object;)V":
+			min.name = "add";
+			break;
+
+		case "getFirst()Ljava/lang/Object;":
+		case "getLast()Ljava/lang/Object;":
+		case "removeFirst()Ljava/lang/Object;":
+		case "removeLast()Ljava/lang/Object;":
+			min.setOpcode(Opcodes.INVOKESTATIC);
+			min.owner = "com/chocohead/nsn/Lists";
+			min.desc = "(Ljava/util/List;".concat(min.desc.substring(1));
+			min.itf = false;
+			break;
+
+		case "reversed()Ljava/util/List;":
+			min.setOpcode(Opcodes.INVOKESTATIC);
+			min.owner = "com/google/common/collect/Lists";
+			min.name = "reverse";
+			min.desc = "(Ljava/util/List;)Ljava/util/List;";
+			min.itf = false;
+			break;
+		}
 	}
 }
