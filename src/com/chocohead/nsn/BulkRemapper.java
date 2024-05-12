@@ -367,6 +367,23 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 						break;
 					}
+
+					case "java/lang/runtime/SwitchBootstraps": {
+						switch (idin.bsm.getName()) {
+						case "typeSwitch": {
+							MethodNode implementation = Switchy.typeSwitch(Type.getMethodType(idin.desc), idin.bsmArgs);
+							it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, node.name, implementation.name, implementation.desc, isInterface));
+							extraMethods.add(implementation);
+							break;
+						}
+
+						case "enumSwitch": {
+							//Will be needed in future...
+							break;
+						}
+						}
+						break;
+					}
 					}
 
 					for (int i = 0, end = idin.bsmArgs.length; i < end; i++) {
