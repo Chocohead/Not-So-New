@@ -281,6 +281,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			if (method.desc.contains("Ljava/util/SequencedCollection;")) {
 				method.desc = method.desc.replace("Ljava/util/SequencedCollection;", "Ljava/util/Collection;");
 			}
+			if (method.desc.contains("Ljava/util/SequencedMap;")) {
+				method.desc = method.desc.replace("Ljava/util/SequencedMap;", "Ljava/util/Map;");
+			}
 			if (method.desc.contains("Ljava/net/http/")) {
 				method.desc = method.desc.replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/");
 			}
@@ -1044,6 +1047,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/SequencedMap": {
+						min.owner = "java/util/Map";
+						break;
+					}
+
 					case "java/util/stream/Stream": {
 						switch (min.name.concat(min.desc)) {
 						case "toList()Ljava/util/List;":
@@ -1373,6 +1381,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 						break;
 					}
+
+					default:
+						min.desc = min.desc.replace("java/util/SequencedMap", "java/util/Map");
+						break;
 					}
 					break;
 				}
@@ -1380,7 +1392,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				case AbstractInsnNode.FIELD_INSN: {
 					FieldInsnNode fin = (FieldInsnNode) insn;
 
-					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
+					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger").replace("java/util/SequencedMap", "java/util/Map");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
 						fin.owner = "com/chocohead/nsn/StackWalker$Option";						
@@ -1404,6 +1416,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/lang/MatchException":
 						tin.desc = "com/chocohead/nsn/MatchException";
 						break;
+					case "java/util/SequencedMap":
+						tin.desc = "java/util/Map";
+						break;
 					}
 					break;
 				}
@@ -1413,7 +1428,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		node.methods.addAll(extraMethods);
 
 		for (FieldNode field : node.fields) {
-			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
+			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger").replace("java/util/SequencedMap", "java/util/Map");
 		}
 
 		for (Iterator<InnerClassNode> it = node.innerClasses.iterator(); it.hasNext();) {
