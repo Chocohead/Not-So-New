@@ -455,6 +455,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								}
 								break;
 							}
+
+							case "java/lang/StackWalker$StackFrame": {
+								idin.bsmArgs[i] = new Handle(handle.getTag(), "com/chocohead/nsn/StackWalker$StackFrame", handle.getName(), handle.getDesc(), handle.isInterface());
+								break;
+							}
 							}
 						} else if (idin.bsmArgs[i] instanceof Type) {
 							Type type = (Type) idin.bsmArgs[i];
@@ -474,8 +479,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 								for (int j = 0; j < args.length; j++) {
 									String desc = args[j].getDescriptor();
-									if (desc.contains("Ljava/lang/Record;") || desc.contains("Ljava/util/ServiceLoader$Provider;")) {
-										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;"));
+									if (desc.contains("Ljava/lang/Record;") || desc.contains("Ljava/util/ServiceLoader$Provider;") || desc.contains("Ljava/lang/StackWalker$StackFrame;")) {
+										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;").replace("Ljava/lang/StackWalker$StackFrame;", "Lcom/chocohead/nsn/StackWalker$StackFrame;"));
 										madeChange = true;
 									}
 								}
@@ -1453,6 +1458,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			case "java/util/ServiceLoader$Provider": {
 				innerClass.name = "com/chocohead/nsn/ServiceLoaders$Provider";
 				innerClass.outerName = "com/chocohead/nsn/ServiceLoaders";
+				break;
+			}
+
+			case "java/lang/StackWalker$Option":
+			case "java/lang/StackWalker$StackFrame": {
+				innerClass.name = "com/chocohead/nsn/StackWalker".concat(innerClass.name.substring(21));
+				innerClass.outerName = "com/chocohead/nsn/StackWalker";
 				break;
 			}
 
