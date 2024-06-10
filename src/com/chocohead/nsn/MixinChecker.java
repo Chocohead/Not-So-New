@@ -1,12 +1,15 @@
 package com.chocohead.nsn;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -32,6 +35,28 @@ import org.spongepowered.asm.mixin.transformer.Config;
 import com.chocohead.nsn.util.Fields;
 
 public class MixinChecker extends ClassVisitor {
+	private static class References {
+		final List<Type> usedTypes;
+		final List<String> usedMethods;
+
+		References(Set<Type> usedTypes, Set<String> usedMethods) {
+			this.usedTypes = copy(usedTypes);
+			this.usedMethods = copy(usedMethods);
+		}
+
+		private static <T> List<T> copy(Set<T> set) {
+			switch (set.size()) {
+			case 0:
+				return Collections.emptyList();
+
+			case 1:
+				return Collections.singletonList(set.iterator().next());
+
+			default:
+				return new ArrayList<>(set);
+			}
+		}
+	}
 	private static final String TARGET = Type.getDescriptor(Mixin.class);
 	private static final String PLUGIN = Type.getInternalName(IMixinConfigPlugin.class);
 	private final AnnotationVisitor mixinVisitor = new AnnotationVisitor(api) {
@@ -97,6 +122,14 @@ public class MixinChecker extends ClassVisitor {
 	};
 	private final MethodVisitor pluginVisitor = new TypeSpectator() {
 		private final Set<Type> seenTypes = new HashSet<>();
+		private final Set<String> usedMethods = new HashSet<>();
+
+		@Override
+		public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
+			super.visitMethodInsn(opcode, owner, name, descriptor, isInterface);
+
+			if (MixinChecker.this.name.equals(owner)) usedMethods.add(name.concat(descriptor));
+		}
 
 		@Override
 		protected void visitType(Type type) {
@@ -108,8 +141,10 @@ public class MixinChecker extends ClassVisitor {
 
 		@Override
 		public void visitEnd() {
-			pluginTypes.addAll(seenTypes);
+			methodReferences.put(visitedMethod, new References(seenTypes, usedMethods));
 			seenTypes.clear();
+			usedMethods.clear();
+			visitedMethod = null;
 		}
 	};
 	private String name;
@@ -117,6 +152,8 @@ public class MixinChecker extends ClassVisitor {
 	private boolean isMixin, isPlugin;
 	private String nestHost;
 	private final Set<String> nestMates = new HashSet<>();
+	private String visitedMethod;
+	private final Map<String, References> methodReferences = new HashMap<>(8);
 	private final Set<Type> pluginTypes = new HashSet<>();
 
 	public MixinChecker() {
@@ -157,8 +194,24 @@ public class MixinChecker extends ClassVisitor {
 
 	@Override
 	public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-		return isPlugin && ("postApply".equals(name) || "preApply".equals(name))
-				&& "(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V".equals(descriptor) ? pluginVisitor : null;
+		if (!isPlugin) return null;
+		visitedMethod = name.concat(descriptor);
+		return pluginVisitor;
+	}
+
+	@Override
+	public void visitEnd() {
+		if (!isPlugin) return;
+		Queue<String> usedMethods = new ArrayDeque<>();
+		usedMethods.add("preApply(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V");
+		usedMethods.add("postApply(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V");
+
+		String method;
+		for (Set<String> checkedMethods = new HashSet<>(); (method = usedMethods.poll()) != null && checkedMethods.add(method);) {
+			References references = methodReferences.get(method);
+			pluginTypes.addAll(references.usedTypes);
+			usedMethods.addAll(references.usedMethods);
+		}
 	}
 
 	public boolean isMixin() {
@@ -204,6 +257,7 @@ public class MixinChecker extends ClassVisitor {
 		targets.clear();
 		nestHost = null;
 		nestMates.clear();
+		methodReferences.clear();
 		pluginTypes.clear();
 	}
 }

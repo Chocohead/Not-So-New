@@ -11,9 +11,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -227,7 +229,8 @@ public class Nester {
 
 	static ScanResult run() {
 		ScanResult out = new ScanResult();
-		Set<Path> seen = new HashSet<>();
+		Set<Path> seen = new HashSet<>(64);
+		Map<String, Path> classRecall = new HashMap<>(512);
 		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
 
 		for (ModContainer mod : FabricLoader.getInstance().getAllMods()) {
@@ -242,7 +245,7 @@ public class Nester {
 					seen.addAll(mod.getOrigin().getPaths());
 				}
 				for (Path root : mod.getRootPaths()) {
-					walkTree(buffer, root, out);
+					walkTree(buffer, root, classRecall, out);
 				}
 				break;
 			}
@@ -252,14 +255,14 @@ public class Nester {
 			Set<Path> logLibraries = (Set<Path>) Fields.readDeclared(((FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider(), "logJars");
 			for (Path library : logLibraries) {
 				if (!seen.add(library)) continue;
-				walkLibrary(buffer, library, out);
+				walkLibrary(buffer, library, classRecall, out);
 			}
 
 			@SuppressWarnings("unchecked")
 			List<Path> libraries = (List<Path>) Fields.readDeclared(((FabricLoaderImpl) FabricLoader.getInstance()).getGameProvider(), "miscGameLibraries");
 			for (Path library : libraries) {
 				if (!seen.add(library)) continue;
-				walkLibrary(buffer, library, out);
+				walkLibrary(buffer, library, classRecall, out);
 			}
 		} catch (ReflectiveOperationException e) {
 			System.err.println("Failed to read GameProvider libraries");
@@ -272,27 +275,30 @@ public class Nester {
 
 	static ScanResult run(Path... paths) {
 		ScanResult out = new ScanResult();
+		Map<String, Path> classRecall = new HashMap<>(512);
 		RecyclableDataInputStream buffer = new RecyclableDataInputStream();
 
 		for (Path path : paths) {
-			walkLibrary(buffer, path, out);
+			walkLibrary(buffer, path, classRecall, out);
 		}
 
 		out.calculateNests();
 		return out;
 	}
 
-	private static void walkLibrary(RecyclableDataInputStream buffer, Path jar, ScanResult result) {
+	private static void walkLibrary(RecyclableDataInputStream buffer, Path jar, Map<String, Path> classRecall, ScanResult result) {
 		try (FileSystem fs = FiledSystems.newFileSystem(jar, Collections.emptyMap())) {
 			for (Path root : fs.getRootDirectories()) {
-				walkTree(buffer, root, result);
+				walkTree(buffer, root, classRecall, result);
 			}
 		} catch (FileSystemAlreadyExistsException | IOException e) {
 			throw new RuntimeException("Failed to read library jar at " + jar, e);
 		}
 	}
 
-	private static void walkTree(RecyclableDataInputStream buffer, Path jar, ScanResult result) {
+	private static void walkTree(RecyclableDataInputStream buffer, Path jar, Map<String, Path> classRecall, ScanResult result) {
+		Map<String, Boolean> pluginClasses = new HashMap<>();
+
 		try {
 			Files.walkFileTree(jar, new FileVisitor<Path>() {
 				private final MixinChecker checker = new MixinChecker();
@@ -353,14 +359,28 @@ public class Nester {
 								ClassReader reader = new ClassReader(in);
 								String name = reader.getClassName();
 								if (skipNewer(file, name)) break out;
+								classRecall.put(name, file);
 								//System.out.println("Planning to transform ".concat(name));
-								reader.accept(checker, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+								if (pluginClasses.containsKey(name)) {
+									UsedTypeVisitor visitor = new UsedTypeVisitor(checker);
+									reader.accept(visitor, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+
+									for (String usedClass : visitor.getUsedClasses()) {
+										pluginClasses.merge(usedClass, Boolean.FALSE, (seen, neverSeen) -> seen);
+									}
+									pluginClasses.put(name, Boolean.TRUE);
+								} else {
+									reader.accept(checker, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+								}
 
 								if (!checker.isMixin()) {
 									result.toTransform.add(name);
 
 									if (checker.isMixinPlugin()) {
-										result.pluginClasses.addAll(checker.getPluginClasses());
+										for (String pluginClass : checker.getPluginClasses()) {
+											pluginClasses.merge(pluginClass, Boolean.FALSE, (seen, neverSeen) -> seen);
+										}
+										pluginClasses.put(name, Boolean.TRUE);
 									}
 
 									if (checker.inNestedSystem()) {
@@ -406,6 +426,52 @@ public class Nester {
 		} catch (IOException e) {//This can only be thrown from the file visitor doing so
 			throw new AssertionError("Unexpected exception", e);
 		}
+
+		if (!pluginClasses.isEmpty()) {
+			Deque<String> toCheck = pluginClasses.entrySet().stream().filter(entry -> entry.getValue() == Boolean.FALSE).map(Entry::getKey).collect(Collectors.toCollection(ArrayDeque::new));
+			UsedTypeVisitor checker = new UsedTypeVisitor();
+
+			String checkedClass;
+			while ((checkedClass = toCheck.poll()) != null) {
+				/*Path file = jar.resolve(checkedClass.concat(".class"));
+				if (!Files.exists(file)) continue; //Might not be a class from this mod*/
+				Path file = classRecall.get(checkedClass);
+				if (file == null) continue; //Might not be a class from this mod
+
+				try (DataInputStream in = buffer.open(Files.newInputStream(file))) {
+					in.mark(16);
+
+					int magic = in.readInt();
+					if (magic != 0xCAFEBABE) {
+						System.err.printf("Expected magic in %s but got %X%n", file, magic);
+						continue; //Not a class?
+					}
+
+					in.readUnsignedShort(); //Minor version
+					if (in.readUnsignedShort() > Opcodes.V1_8) {
+						in.reset();
+
+						ClassReader reader = new ClassReader(in);
+						reader.accept(checker, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+
+						for (String pluginClass : checker.getUsedClasses()) {
+							if (pluginClasses.putIfAbsent(pluginClass, Boolean.FALSE) == null) {
+								toCheck.addLast(pluginClass); //Only note classes we haven't seen yet
+							}
+						}
+
+						checker.reset();
+					}
+				} catch (IOException e) {
+					System.err.println("Broke visiting " + file); //Oops
+					e.printStackTrace();
+				}
+			}
+
+			result.pluginClasses.addAll(pluginClasses.keySet());
+		}
+
+		classRecall.clear();
 	}
 
 	private static class Member {
