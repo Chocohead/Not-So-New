@@ -15,6 +15,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
 
@@ -314,6 +315,13 @@ public class SpecialService {
 		abstract void onSwitch();
 	}
 
+	private interface ClassBytecodeProvider extends IClassBytecodeProvider, Supplier<IClassBytecodeProvider> {
+		@Override
+		default IClassBytecodeProvider get() {
+			return this;
+		}
+	}
+
 	static void link() {
 		IMixinService service = ForwardingFactory.of(IMixinService.class, MixinService.getService()).handling("init", () -> {
 			if (stage == null) {
@@ -324,6 +332,24 @@ public class SpecialService {
 			if (stage == Stage.CROUCH) {
 				stage = Stage.BIND;
 				stage.onSwitch();
+			}
+		}).handling("getBytecodeProvider", IClassBytecodeProvider.class, new ClassBytecodeProvider() {
+			private final IClassBytecodeProvider classSource = MixinService.getService().getBytecodeProvider();
+
+			@Override
+			public ClassNode getClassNode(String name) throws ClassNotFoundException, IOException {
+				return getClassNode(name, true);
+			}
+
+			@Override
+			public ClassNode getClassNode(String name, boolean runTransformers) throws ClassNotFoundException, IOException {
+				if ("java/lang/Record".equals(name)) {
+					ClassNode out = new ClassNode();
+					out.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, name, null, "java/lang/Object", null);
+					return out;
+				}
+
+				return classSource.getClassNode(name, runTransformers);
 			}
 		}).handling("getClassTracker", IClassTracker.class, () -> null).make();
 

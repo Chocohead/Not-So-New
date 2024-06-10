@@ -295,6 +295,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				case AbstractInsnNode.INVOKE_DYNAMIC_INSN: {
 					InvokeDynamicInsnNode idin = (InvokeDynamicInsnNode) insn;
 
+					if (idin.desc.contains("Ljava/lang/Record;")) {
+						idin.desc = idin.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;");
+					}
+
 					switch (idin.bsm.getOwner()) {
 					case "java/lang/invoke/StringConcatFactory": {
 						switch (idin.bsm.getName()) {
@@ -1383,7 +1387,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					default:
-						min.desc = min.desc.replace("java/util/SequencedMap", "java/util/Map");
+						min.desc = min.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("java/util/SequencedMap", "java/util/Map");
 						break;
 					}
 					break;
