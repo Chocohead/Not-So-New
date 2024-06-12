@@ -1446,6 +1446,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "javax/xml/parsers/DocumentBuilderFactory": {
+						if ("newDefaultInstance".equals(min.name) && "()Ljavax/xml/parsers/DocumentBuilderFactory;".equals(min.desc)) {
+							min.name = "newInstance"; //Close enough, it's unlikely any of the overrides would be set
+						}
+						break;
+					}
+
 					default:
 						if (min.owner.startsWith("java/net/http/")) {
 							min.owner = min.owner.replace("java/net/http/", "com/chocohead/nsn/http/");
