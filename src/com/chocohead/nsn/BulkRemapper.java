@@ -24,7 +24,9 @@ import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.TypeReference;
 import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
@@ -34,6 +36,8 @@ import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.RecordComponentNode;
+import org.objectweb.asm.tree.TypeAnnotationNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
@@ -269,6 +273,32 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			}
 		} else {
 			privateMethods = Collections.emptySet();
+		}
+
+		if (node.recordComponents != null) {
+			Map<String, FieldNode> fields = new HashMap<>();
+			for (FieldNode field : node.fields) {
+				if (!Modifier.isStatic(field.access)) {
+					fields.put(field.name, field);
+				}
+			}
+
+			AnnotationVisitor recordAnnotation = node.visitAnnotation("Lcom/chocohead/nsn/Recordy$Record;", true);
+			AnnotationVisitor recordComponents = recordAnnotation.visitArray("value");
+			for (RecordComponentNode component : node.recordComponents) {
+				AnnotationVisitor componentAnnotation = recordComponents.visitAnnotation(null, "Lcom/chocohead/nsn/Recordy$Record$Component;");
+				componentAnnotation.visit("name", component.name);
+				componentAnnotation.visit("signature", component.signature != null ? component.signature : "");
+				componentAnnotation.visitEnd();
+
+				FieldNode field = fields.get(component.name);
+				field.visibleAnnotations = mergeRecordAnnotations(component.visibleAnnotations, field.visibleAnnotations);
+				field.invisibleAnnotations = mergeRecordAnnotations(component.invisibleAnnotations, field.invisibleAnnotations);
+				field.visibleTypeAnnotations = mergeRecordAnnotations(component.visibleTypeAnnotations, field.visibleTypeAnnotations);
+				field.invisibleTypeAnnotations = mergeRecordAnnotations(component.invisibleTypeAnnotations, field.invisibleTypeAnnotations);
+			}
+			recordComponents.visitEnd();
+			recordAnnotation.visitEnd();
 		}
 
 		List<MethodNode> changedMethods = new ArrayList<>();
@@ -1137,16 +1167,29 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/lang/Class": {
-						if ("arrayType".equals(min.name) && "()Ljava/lang/Class;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "arrayType()Ljava/lang/Class;":
 							it.previous();
 							it.add(new InsnNode(Opcodes.ICONST_0));
 							it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/reflect/Array", "newInstance", "(Ljava/lang/Class;I)Ljava/lang/Object;", false));
 							it.next();
 							min.owner = "java/lang/Object";
 							min.name = "getClass";
+
+						case "getRecordComponents()[Ljava/lang/reflect/RecordComponent;":
+							min.desc = min.desc.replace("Ljava/lang/reflect/RecordComponent;", "Lcom/chocohead/nsn/Recordy$RecordComponent;");
+						case "isRecord()Z":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Recordy";
+							min.desc = "(Ljava/lang/Class;".concat(min.desc.substring(1));
+							break;
 						}
 						break;
 					}
+
+					case "java/lang/reflect/RecordComponent":
+						min.owner = "com/chocohead/nsn/Recordy$RecordComponent";
+						break;
 
 					case "java/util/concurrent/CompletableFuture": {
 						switch (min.name.concat(min.desc)) {
@@ -1513,6 +1556,25 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				}
 			}
 		}
+	}
+
+	private static <T extends AnnotationNode> List<T> mergeRecordAnnotations(List<T> from, List<T> to) {
+		if (from == null) return to;
+		if (to == null) return from;
+
+		Set<String> existing = new HashSet<>();
+		for (AnnotationNode annotation : to) {
+			existing.add(annotation.desc);
+		}
+
+		for (T annotation : from) {
+			if (!existing.contains(annotation.desc)) {
+				assert !(annotation instanceof TypeAnnotationNode) || new TypeReference(((TypeAnnotationNode) annotation).typeRef).getSort() == TypeReference.FIELD: annotation.desc;
+				to.add(annotation);
+			}            
+        }
+
+		return to;
 	}
 
 	private static String prependMem(String to) {

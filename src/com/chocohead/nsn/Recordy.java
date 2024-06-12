@@ -1,7 +1,20 @@
 package com.chocohead.nsn;
 
+import java.lang.annotation.Annotation;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.AnnotatedType;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+
+import org.apache.commons.lang3.reflect.FieldUtils;
+import org.apache.commons.lang3.reflect.MethodUtils;
 
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
@@ -10,7 +23,96 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.InstructionAdapter;
 import org.objectweb.asm.tree.MethodNode;
 
+import com.chocohead.nsn.Recordy.Record.Component;
+
 public class Recordy {
+	@Target(ElementType.TYPE)
+	@Retention(RetentionPolicy.RUNTIME)
+	public @interface Record {
+		@Target({/* Just inside @Record */})
+		@Retention(RetentionPolicy.RUNTIME)
+		@interface Component {
+			String name();
+
+			String signature();
+		}
+
+		Component[] value();
+	}
+
+	public static class RecordComponent implements AnnotatedElement {
+		private final Class<?> clazz;
+		private final Field field;
+		private final String signature;
+		private final Method getter;
+
+		RecordComponent(Class<?> clazz, Component component) {
+			this.clazz = clazz;
+			String name = component.name();
+			field = FieldUtils.getDeclaredField(clazz, name, true);
+			getter = MethodUtils.getAccessibleMethod(clazz, name);
+			String signature = component.signature();
+			this.signature = !signature.isEmpty() ? signature : null;
+		}
+
+		public Class<?> getDeclaringRecord() {
+			return clazz;
+		}
+
+		public String getName() {
+			return field.getName();
+		}
+
+		public Class<?> getType() {
+			return field.getType();
+		}
+
+		public String getGenericSignature() {
+			return signature;
+		}
+
+		public java.lang.reflect.Type getGenericType() {
+			return field.getGenericType();
+		}
+
+		public AnnotatedType getAnnotatedType() {
+			return field.getAnnotatedType();
+		}
+
+		public Method getAccessor() {
+			return getter;
+		}
+
+		@Override
+		public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
+			return field.getAnnotation(annotationClass);
+		}
+
+		@Override
+		public Annotation[] getAnnotations() {
+			return field.getAnnotations();
+		}
+
+		@Override
+		public Annotation[] getDeclaredAnnotations() {
+			return field.getDeclaredAnnotations();
+		}
+
+		@Override
+		public String toString() {
+			return getType().getTypeName() + ' ' + getName();
+		}
+	}
+
+	public static boolean isRecord(Class<?> clazz) {
+		return clazz.isAnnotationPresent(Record.class);
+	}
+
+	public static RecordComponent[] getRecordComponents(Class<?> clazz) {
+		Record info = clazz.getAnnotation(Record.class);
+		return info != null ? Arrays.stream(info.value()).map(component -> new RecordComponent(clazz, component)).toArray(RecordComponent[]::new) : null;
+	}
+
 	public static boolean equals(boolean a, boolean b) {
 		return a == b;
 	}
