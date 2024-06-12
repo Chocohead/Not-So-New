@@ -14,6 +14,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableList;
 
@@ -270,10 +271,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			privateMethods = Collections.emptySet();
 		}
 
+		List<MethodNode> changedMethods = new ArrayList<>();
 		List<MethodNode> extraMethods = new ArrayList<>();
 		for (MethodNode method : node.methods) {
 			if (method.desc.contains("Ljava/lang/Record;")) {
 				method.desc = method.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;");
+				changedMethods.add(method);
 			}
 			if (method.desc.contains("Ljava/util/ServiceLoader$Provider;")) {
 				method.desc = method.desc.replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;");
@@ -1440,6 +1443,32 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 					break;
 				}
+				}
+			}
+		}
+		if (!changedMethods.isEmpty()) {
+			Map<String, List<MethodNode>> nameOverlaps = node.methods.stream().collect(Collectors.groupingBy(method -> method.name.concat(method.desc)));
+
+			for (List<MethodNode> methods : nameOverlaps.values()) {
+				if (methods.size() == 2) {//Duplicate method name and descriptor...
+					MethodNode first = methods.get(0);
+					MethodNode second = methods.get(1);
+
+					if (changedMethods.contains(first)) {
+						if (changedMethods.contains(second)) {
+							//Two changed methods overlap now?
+						} else {
+							if ((second.access & Opcodes.ACC_BRIDGE) != 0) {
+								second.name = "£accidentalOverlap£".concat(second.name);
+								continue;
+							}
+						}
+					} else if (changedMethods.contains(second)) {
+						if ((first.access & Opcodes.ACC_BRIDGE) != 0) {
+							first.name = "£accidentalOverlap£".concat(first.name);
+							continue;
+						}
+					}
 				}
 			}
 		}
