@@ -447,6 +447,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								break;
 							}
 
+							case "java/util/Map": {
+								switch (handle.getName().concat(handle.getDesc())) {
+								case "entry(Ljava/lang/Object;Ljava/lang/Object;)Ljava/util/Map$Entry;":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/chocohead/nsn/Maps", handle.getName(), handle.getDesc(), false);
+									break;
+								}
+								break;
+							}
+
 							case "java/lang/Character": {
 								switch (handle.getName().concat(handle.getDesc())) {
 								case "toString(I)Ljava/lang/String;":
