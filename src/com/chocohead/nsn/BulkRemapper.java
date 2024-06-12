@@ -1486,6 +1486,33 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 					break;
 				}
+
+				case AbstractInsnNode.LDC_INSN:
+					LdcInsnNode ldc = (LdcInsnNode) insn;
+
+					if (ldc.cst instanceof Type && "java/lang/Record".equals(((Type) ldc.cst).getInternalName())) {
+						//Looking for Record.class.isAssignableFrom(var)
+						boolean drop = false;
+						if (it.next().getType() == AbstractInsnNode.VAR_INSN) {
+							AbstractInsnNode next = it.next();
+
+							if (next.getType() == AbstractInsnNode.METHOD_INSN) {
+								MethodInsnNode minsn = (MethodInsnNode) next;
+
+								if ("java/lang/Class".equals(minsn.owner) && "isAssignableFrom".equals(minsn.name) && "(Ljava/lang/Class;)Z".equals(minsn.desc)) {
+									it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, "com/chocohead/nsn/Recordy", "isRecord", "(Ljava/lang/Class;)Z", false));
+									drop = true;
+								}
+							}
+
+							it.previous();
+						}
+						it.previous();
+						if (drop) {
+							it.previous();
+							it.remove();
+						}
+					}
 				}
 			}
 		}
