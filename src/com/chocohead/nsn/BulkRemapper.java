@@ -498,6 +498,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								break;
 							}
 
+							case "java/lang/String": {
+								switch (handle.getName().concat(handle.getDesc())) {
+								case "isBlank()Z":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "org/apache/commons/lang3/StringUtils", handle.getName(), "(Ljava/lang/CharSequence;)Z", false);
+									break;
+								}
+								break;
+							}
+
 							case "java/lang/StackWalker$StackFrame": {
 								idin.bsmArgs[i] = new Handle(handle.getTag(), "com/chocohead/nsn/StackWalker$StackFrame", handle.getName(), handle.getDesc(), handle.isInterface());
 								break;
