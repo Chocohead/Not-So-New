@@ -1406,6 +1406,18 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/Random": {
+						switch (min.name.concat(min.desc)) {
+						case "nextFloat(F)F":
+						case "nextFloat(FF)F":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Randoms"; //Apache's RandomUtils has a nextFloat, but that doesn't take a Random instance
+							min.desc = "(Ljava/util/Random;".concat(min.desc.substring(1));
+							break;
+						}
+						break;
+					}
+
 					case "java/lang/StackWalker": {
 						if ("getCallerClass".equals(min.name) && "()Ljava/lang/Class;".equals(min.desc)) {
 							it.previous();
