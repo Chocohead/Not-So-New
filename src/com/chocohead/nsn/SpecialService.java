@@ -343,10 +343,13 @@ public class SpecialService {
 
 			@Override
 			public ClassNode getClassNode(String name, boolean runTransformers) throws ClassNotFoundException, IOException {
-				if ("java/lang/Record".equals(name)) {
+				switch (name) {
+				case "java/lang/Record":
+				case "java/lang/StackWalker": {
 					ClassNode out = new ClassNode();
 					out.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, name, null, "java/lang/Object", null);
 					return out;
+				}
 				}
 
 				return classSource.getClassNode(name, runTransformers);
