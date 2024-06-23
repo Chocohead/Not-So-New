@@ -235,7 +235,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 	@Override
 	public void preApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
-		if (mixinClassName.endsWith(".InterfaceMixin") && HUMBLE_INTERFACES.containsKey(node.name)) {
+		if (mixinClassName.endsWith(".SuperMixin")) {
+			if ("java/lang/Record".equals(node.superName)) {
+				node.access &= ~Opcodes.ACC_RECORD;
+				node.superName = "java/lang/Object"; //Record only defines some abstract methods
+			}
+		} else if (mixinClassName.endsWith(".InterfaceMixin") && HUMBLE_INTERFACES.containsKey(node.name)) {
 			MethodNode method = new MethodNode(Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "k££makeSomeMagic££", "()V", null, null);
 			method.instructions.add(new InsnNode(Opcodes.RETURN));
 			node.methods.add(method);
@@ -256,10 +261,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
 	static void transform(ClassNode node) {
 		node.version = Opcodes.V1_8;
 
-		if ("java/lang/Record".equals(node.superName)) {
-			node.access &= ~Opcodes.ACC_RECORD;
-			node.superName = "java/lang/Object"; //Record only defines some abstract methods
-		}
 		boolean isInterface = Modifier.isInterface(node.access);
 
 		Set<String> privateMethods;
