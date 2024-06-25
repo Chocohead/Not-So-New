@@ -1185,6 +1185,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.next();
 							min.owner = "java/lang/Object";
 							min.name = "getClass";
+							break;
 
 						case "getRecordComponents()[Ljava/lang/reflect/RecordComponent;":
 							min.desc = min.desc.replace("Ljava/lang/reflect/RecordComponent;", "Lcom/chocohead/nsn/Recordy$RecordComponent;");
