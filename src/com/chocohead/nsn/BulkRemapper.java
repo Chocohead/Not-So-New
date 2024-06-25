@@ -1198,6 +1198,19 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/reflect/AccessibleObject":
+					case "java/lang/reflect/Constructor":
+					case "java/lang/reflect/Executable":
+					case "java/lang/reflect/Field":
+					case "java/lang/reflect/Method": {
+						if ("canAccess".equals(min.name) && "(Ljava/lang/Object;)Z".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/AccessibleObjects";
+							min.desc = "(Ljava/lang/reflect/AccessibleObject;".concat(min.desc.substring(1));
+						}
+						break;
+					}
+
 					case "java/lang/reflect/RecordComponent":
 						min.owner = "com/chocohead/nsn/Recordy$RecordComponent";
 						break;
