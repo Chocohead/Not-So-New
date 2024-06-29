@@ -261,6 +261,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 	static void transform(ClassNode node) {
 		node.version = Opcodes.V1_8;
 
+		if ("java/lang/Record".equals(node.superName)) {
+			node.access &= ~Opcodes.ACC_RECORD;
+			node.superName = "java/lang/Object"; //Record only defines some abstract methods
+		}
 		boolean isInterface = Modifier.isInterface(node.access);
 
 		Set<String> privateMethods;
