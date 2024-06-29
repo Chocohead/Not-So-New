@@ -52,6 +52,18 @@ public class CompletableFutures {
 		return self;
 	}
 
+	public static Executor delayedExecutor(long delay, TimeUnit unit, Executor executor) {
+		return delayedExecutor(task -> CompletableFuture.runAsync(task, executor), delay, unit);
+	}
+
+	public static Executor delayedExecutor(long delay, TimeUnit unit) {
+		return delayedExecutor(CompletableFuture::runAsync, delay, unit);
+	}
+
+	private static Executor delayedExecutor(Function<Runnable, CompletableFuture<Void>> taskConsumer, long delay, TimeUnit unit) {
+		return task -> Timer.start(() -> taskConsumer.apply(task), delay, unit);
+	}
+
 	public static <T> CompletableFuture<T> exceptionallyAsync(CompletableFuture<T> self, Function<Throwable, ? extends T> action) {
 		return self.handle((result, e) -> e == null ? self : self.<T>handleAsync((innerResult, innerE) -> action.apply(innerE))).thenCompose(Function.identity());
 	}

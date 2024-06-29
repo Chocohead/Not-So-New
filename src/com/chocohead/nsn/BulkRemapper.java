@@ -1217,10 +1217,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/util/concurrent/CompletableFuture": {
 						switch (min.name.concat(min.desc)) {
-						case "failedFuture(Ljava/lang/Throwable;)Ljava/util/concurrent/CompletableFuture;":
-							min.owner = "com/chocohead/nsn/CompletableFutures";
-							break;
-
 						case "orTimeout(JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/CompletableFuture;":
 						case "completeOnTimeout(Ljava/lang/Object;JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/CompletableFuture;":
 						case "exceptionallyAsync(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":
@@ -1229,8 +1225,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "exceptionallyComposeAsync(Ljava/util/function/Function;)Ljava/util/concurrent/CompletableFuture;":
 						case "exceptionallyComposeAsync(Ljava/util/function/Function;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/CompletableFuture;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
-							min.owner = "com/chocohead/nsn/CompletableFutures";
 							min.desc = "(Ljava/util/concurrent/CompletableFuture;".concat(min.desc.substring(1));
+						case "failedFuture(Ljava/lang/Throwable;)Ljava/util/concurrent/CompletableFuture;":
+						case "delayedExecutor(JLjava/util/concurrent/TimeUnit;)Ljava/util/concurrent/Executor;":
+						case "delayedExecutor(JLjava/util/concurrent/TimeUnit;Ljava/util/concurrent/Executor;)Ljava/util/concurrent/Executor;":
+							min.owner = "com/chocohead/nsn/CompletableFutures";
 							break;
 						}
 						break;
