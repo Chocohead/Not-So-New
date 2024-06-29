@@ -31,6 +31,7 @@ import org.spongepowered.asm.mixin.refmap.IReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.ReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.RemappingReferenceMapper;
 import org.spongepowered.asm.mixin.transformer.Config;
+import org.spongepowered.asm.mixin.transformer.ext.IExtension;
 
 import com.chocohead.nsn.util.Fields;
 
@@ -59,6 +60,7 @@ public class MixinChecker extends ClassVisitor {
 	}
 	private static final String TARGET = Type.getDescriptor(Mixin.class);
 	private static final String PLUGIN = Type.getInternalName(IMixinConfigPlugin.class);
+	private static final String EXTENSION = Type.getInternalName(IExtension.class);
 	private final AnnotationVisitor mixinVisitor = new AnnotationVisitor(api) {
 		private final Map<IMixinConfig, IReferenceMapper> remappers = new IdentityHashMap<>();
 
@@ -149,7 +151,7 @@ public class MixinChecker extends ClassVisitor {
 	};
 	private String name;
 	private final List<Supplier<String>> targets = new ArrayList<>();
-	private boolean isMixin, isPlugin;
+	private boolean isMixin, isPlugin, isExtension;
 	private String nestHost;
 	private final Set<String> nestMates = new HashSet<>();
 	private String visitedMethod;
@@ -167,7 +169,10 @@ public class MixinChecker extends ClassVisitor {
 		for (String interfaceName : interfaces) {
 			if (PLUGIN.equals(interfaceName)) {
 				isPlugin = true;
-				break;
+				if (isExtension) break;
+			} else if (EXTENSION.equals(interfaceName)) {
+				isExtension = true;
+				if (isPlugin) break;
 			}
 		}
 	}
@@ -205,6 +210,11 @@ public class MixinChecker extends ClassVisitor {
 		Queue<String> usedMethods = new ArrayDeque<>();
 		usedMethods.add("preApply(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V");
 		usedMethods.add("postApply(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V");
+		if (isExtension) {
+			usedMethods.add("preApply(Lorg/spongepowered/asm/mixin/transformer/ext/ITargetClassContext;)V");
+			usedMethods.add("postApply(Lorg/spongepowered/asm/mixin/transformer/ext/ITargetClassContext;)V");
+			usedMethods.add("export(Lorg/spongepowered/asm/mixin/MixinEnvironment;Ljava/lang/String;ZLorg/objectweb/asm/tree/ClassNode;)V");
+		}
 
 		String method;
 		for (Set<String> checkedMethods = new HashSet<>(); (method = usedMethods.poll()) != null && checkedMethods.add(method);) {
@@ -257,6 +267,7 @@ public class MixinChecker extends ClassVisitor {
 		targets.clear();
 		nestHost = null;
 		nestMates.clear();
+		isExtension = false;
 		methodReferences.clear();
 		pluginTypes.clear();
 	}
