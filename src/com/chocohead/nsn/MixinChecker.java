@@ -208,6 +208,7 @@ public class MixinChecker extends ClassVisitor {
 	public void visitEnd() {
 		if (!isPlugin) return;
 		Queue<String> usedMethods = new ArrayDeque<>();
+		usedMethods.add("onLoad(Ljava/lang/String;)V");
 		usedMethods.add("preApply(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V");
 		usedMethods.add("postApply(Ljava/lang/String;Lorg/objectweb/asm/tree/ClassNode;Ljava/lang/String;Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;)V");
 		if (isExtension) {
