@@ -565,6 +565,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								break;
 							}
 
+							case "java/lang/invoke/MethodHandles": {
+								switch (handle.getName().concat(handle.getDesc())) {
+								case "classData(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;":
+								case "classDataAt(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/Class;I)Ljava/lang/Object;":
+									idin.bsmArgs[i] = new Handle(handle.getTag(), "com/chocohead/nsn/Binoculars", handle.getName(), handle.getDesc(), handle.isInterface());
+									break;
+								}
+								break;
+							}
+
 							default: {
 								if (handle.getOwner().startsWith("java/net/http/")) {
 									idin.bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner().replace("java/net/http/", "com/chocohead/nsn/http/"), handle.getName(), handle.getDesc().replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"), handle.isInterface());
@@ -1258,6 +1268,24 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.name = "getClass";
 							break;
 
+						case "componentType()Ljava/lang/Class;":
+							min.name = "getComponentType";
+							break;
+
+						case "descriptorString()Ljava/lang/String;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/objectweb/asm/Type";
+							min.name = "getDescriptor";
+							min.desc = "(Ljava/lang/Class;)Ljava/lang/String;";
+							break;
+
+						case "getPackageName()Ljava/lang/String;":
+						case "isHidden()Z":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Classes"; //ClassUtils has a getPackageName, but with different behaviour for primitives
+							min.desc = "(Ljava/lang/Class;".concat(min.desc.substring(1));
+							break;
+
 						case "getRecordComponents()[Ljava/lang/reflect/RecordComponent;":
 							min.desc = min.desc.replace("Ljava/lang/reflect/RecordComponent;", "Lcom/chocohead/nsn/Recordy$RecordComponent;");
 						case "isRecord()Z":
@@ -1306,9 +1334,18 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/invoke/MethodType": {
+						if ("descriptorString".equals(min.name) && "()Ljava/lang/String;".equals(min.desc)) {
+							min.name = "toMethodDescriptorString";
+						}
+						break;
+					}
+
 					case "java/lang/invoke/MethodHandles": {
 						switch (min.name.concat(min.desc)) {
 						case "privateLookupIn(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;":
+						case "classData(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;":
+						case "classDataAt(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/Class;I)Ljava/lang/Object;":
 						case "arrayElementVarHandle(Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;":
 							min.owner = "com/chocohead/nsn/Binoculars";
 							min.desc = min.desc.replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
@@ -1320,6 +1357,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/lang/invoke/MethodHandles$Lookup": {
 						switch (min.name.concat(min.desc)) {
 						case "defineClass([B)Ljava/lang/Class;":
+						case "defineHiddenClass([BZ[Ljava/lang/invoke/MethodHandles$Lookup$ClassOption;)Ljava/lang/invoke/MethodHandles$Lookup;":
+						case "defineHiddenClassWithClassData([BLjava/lang/Object;Z[Ljava/lang/invoke/MethodHandles$Lookup$ClassOption;)Ljava/lang/invoke/MethodHandles$Lookup;":
+						case "findClass(Ljava/lang/String;)Ljava/lang/Class;":
 						case "findVarHandle(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;":
 						case "findStaticVarHandle(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;":
 						case "unreflectVarHandle(Ljava/lang/reflect/Field;)Ljava/lang/invoke/VarHandle;":
@@ -1741,7 +1781,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				case AbstractInsnNode.FIELD_INSN: {
 					FieldInsnNode fin = (FieldInsnNode) insn;
 
-					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger").replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/");
+					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
+							.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/")
+							.replace("java/lang/invoke/MethodHandles$Lookup$ClassOption", "com/chocohead/nsn/Binoculars$ClassOption").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
 						fin.owner = "com/chocohead/nsn/StackWalker$Option";
@@ -1749,6 +1791,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						fin.owner = fin.owner.replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
 					} else if (fin.owner.startsWith("java/net/http/")) {
 						fin.owner = fin.owner.replace("java/net/http/", "com/chocohead/nsn/http/");
+					} else if ("java/lang/invoke/MethodHandles$Lookup$ClassOption".equals(fin.owner)) {
+						fin.owner = "com/chocohead/nsn/Binoculars$ClassOption";
 					}
 					break;
 				}
@@ -1769,6 +1813,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					case "java/util/SequencedMap":
 						tin.desc = "java/util/Map";
+						break;
+					case "java/lang/invoke/MethodHandles$Lookup$ClassOption":
+						tin.desc = "com/chocohead/nsn/Binoculars$ClassOption";
 						break;
 					case "java/lang/IllegalCallerException":
 						tin.desc = "com/chocohead/nsn/IllegalCallerException";
@@ -1878,6 +1925,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			case "java/lang/StackWalker$StackFrame": {
 				innerClass.name = "com/chocohead/nsn/StackWalker".concat(innerClass.name.substring(21));
 				innerClass.outerName = "com/chocohead/nsn/StackWalker";
+				break;
+			}
+
+			case "java/lang/invoke/MethodHandles$Lookup$ClassOption": {
+				innerClass.name = "com/chocohead/nsn/Binoculars$ClassOption";
+				innerClass.outerName = "com/chocohead/nsn/Binoculars";
 				break;
 			}
 
