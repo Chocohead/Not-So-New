@@ -491,6 +491,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							switch (handle.getOwner()) {
 							case "java/util/Optional": {
 								switch (handle.getName().concat(handle.getDesc())) {
+								case "isEmpty()Z":
 								case "ifPresentOrElse(Ljava/util/function/Consumer;Ljava/lang/Runnable;)V":
 								case "or(Ljava/util/function/Supplier;)Ljava/util/Optional;":
 								case "stream()Ljava/util/stream/Stream;":
