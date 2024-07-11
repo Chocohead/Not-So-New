@@ -1,6 +1,7 @@
 package com.chocohead.nsn;
 
 import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -11,8 +12,10 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Queue;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -20,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.ConstantDynamic;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -306,9 +310,40 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			recordAnnotation.visitEnd();
 		}
 
-		List<MethodNode> changedMethods = new ArrayList<>();
+		Queue<MethodNode> methodQueue = new ArrayDeque<>(node.methods);
 		List<MethodNode> extraMethods = new ArrayList<>();
-		for (MethodNode method : node.methods) {
+		Function<ConstantDynamic, MethodNode> dynamicConstants = new Function<ConstantDynamic, MethodNode>() {
+			private final Map<ConstantDynamic, MethodNode> dynamicConstants = new HashMap<>();
+
+			@Override
+			public MethodNode apply(ConstantDynamic constant) {
+				MethodNode out = dynamicConstants.get(constant);
+
+				if (out == null) {
+					Object[] args = new Object[1 + constant.getBootstrapMethodArgumentCount()];
+					args[0] = constant.getBootstrapMethod();
+					for (int i = 1; i < args.length; i++) {
+						args[i] = constant.getBootstrapMethodArgument(i - 1);
+					}
+
+					out = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC, "constant£" + dynamicConstants.size(), "()".concat(constant.getDescriptor()), null, null);
+					out.visitCode();
+					out.visitInvokeDynamicInsn("_", out.desc, new Handle(Opcodes.H_INVOKESTATIC, "com/chocohead/nsn/DynamicConstants", "link",
+							"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;", false), args);
+					out.visitInsn(Type.getType(constant.getDescriptor()).getOpcode(Opcodes.IRETURN));
+					out.visitEnd();
+
+					dynamicConstants.put(constant, out);
+					methodQueue.add(out);
+					extraMethods.add(out);
+				}
+
+				return out;
+			}
+		};
+		List<MethodNode> changedMethods = new ArrayList<>();
+
+		for (MethodNode method; (method = methodQueue.poll()) != null;) {
 			if (method.desc.contains("Ljava/lang/Record;")) {
 				method.desc = method.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;");
 				changedMethods.add(method);
@@ -549,6 +584,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								break;
 							}
 							}
+						} else if (idin.bsmArgs[i] instanceof ConstantDynamic) {
+							ConstantDynamic constant = (ConstantDynamic) idin.bsmArgs[i];
+
+							MethodNode constantCall = dynamicConstants.apply(constant);
+							idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, node.name, constantCall.name, constantCall.desc, isInterface);
 						}
 					}
 					break;
@@ -1546,7 +1586,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				case AbstractInsnNode.LDC_INSN:
 					LdcInsnNode ldc = (LdcInsnNode) insn;
 
-					if (ldc.cst instanceof Type && "java/lang/Record".equals(((Type) ldc.cst).getInternalName())) {
+					if (ldc.cst instanceof ConstantDynamic) {
+						ConstantDynamic constant = (ConstantDynamic) ldc.cst;
+
+						MethodNode constantCall = dynamicConstants.apply(constant);
+						it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, node.name, constantCall.name, constantCall.desc, isInterface));
+					} else if (ldc.cst instanceof Type && "java/lang/Record".equals(((Type) ldc.cst).getInternalName())) {
 						//Looking for Record.class.isAssignableFrom(var)
 						boolean drop = false;
 						if (it.next().getType() == AbstractInsnNode.VAR_INSN) {
