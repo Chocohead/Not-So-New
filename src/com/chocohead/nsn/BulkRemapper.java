@@ -242,8 +242,20 @@ public class BulkRemapper implements IMixinConfigPlugin {
 	public void preApply(String targetClassName, ClassNode node, String mixinClassName, IMixinInfo mixinInfo) {
 		if (mixinClassName.endsWith(".SuperMixin")) {
 			if ("java/lang/Record".equals(node.superName)) {
-				node.access &= ~Opcodes.ACC_RECORD;
-				node.superName = "java/lang/Object"; //Record only defines some abstract methods
+				for (MethodNode method : node.methods) {
+					if (!"<init>".equals(method.name)) continue;
+
+					for (AbstractInsnNode insn : method.instructions) {
+						if (insn.getType() == AbstractInsnNode.METHOD_INSN && insn.getOpcode() == Opcodes.INVOKESPECIAL) {
+							MethodInsnNode minsn = (MethodInsnNode) insn;
+
+							if ("<init>".equals(minsn.name) && "java/lang/Record".equals(minsn.owner)) {
+								minsn.owner = "java/lang/Object";
+								break; //Should only be one constructor call, Record itself is abstract
+							}
+						} 
+					}
+				}
 			}
 		} else if (mixinClassName.endsWith(".InterfaceMixin") && HUMBLE_INTERFACES.containsKey(node.name)) {
 			MethodNode method = new MethodNode(Opcodes.ACC_STATIC | Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC, "k££makeSomeMagic££", "()V", null, null);
