@@ -552,6 +552,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								idin.bsmArgs[i] = new Handle(handle.getTag(), "com/chocohead/nsn/StackWalker$StackFrame", handle.getName(), handle.getDesc(), handle.isInterface());
 								break;
 							}
+
+							default: {
+								if (handle.getOwner().startsWith("java/net/http/")) {
+									idin.bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner().replace("java/net/http/", "com/chocohead/nsn/http/"), handle.getName(), handle.getDesc().replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"), handle.isInterface());
+								}
+								break;
+							}
 							}
 						} else if (idin.bsmArgs[i] instanceof Type) {
 							Type type = (Type) idin.bsmArgs[i];
@@ -576,8 +583,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 										madeChange = true;
 									}
 								}
-								if (returnType.getDescriptor().contains("Ljava/lang/Record;") || returnType.getDescriptor().contains("Ljava/util/ServiceLoader$Provider;")) {
-									returnType = Type.getType(returnType.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;"));
+								if ("java/lang/Record".equals(returnType.getInternalName()) || "Ljava/util/ServiceLoader$Provider;".equals(returnType.getInternalName()) || returnType.getInternalName().startsWith("java/net/http/")) {
+									returnType = Type.getType(returnType.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"));
 									madeChange = true;
 								}
 
