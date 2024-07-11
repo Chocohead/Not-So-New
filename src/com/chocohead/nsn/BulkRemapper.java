@@ -960,6 +960,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/Character": {
+						if ("toString".equals(min.name) && "(I)Ljava/lang/String;".equals(min.desc)) {
+							min.owner = "com/chocohead/nsn/Characters";
+						}
+						break;
+					}
+
 					case "java/lang/StringBuilder": {
 						if ("isEmpty".equals(min.name) && "()Z".equals(min.desc)) {
 							min.setOpcode(Opcodes.INVOKESTATIC);
@@ -1664,6 +1671,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/StackWalker$Option":
+					case "java/lang/StackWalker$StackFrame": {
+						min.owner = "com/chocohead/nsn/StackWalker".concat(min.owner.substring(21));
+					}
+
 					case "java/util/ServiceLoader": {
 						switch (min.name.concat(min.desc)) {
 						case "findFirst()Ljava/util/Optional;":
@@ -1720,7 +1732,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger").replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
-						fin.owner = "com/chocohead/nsn/StackWalker$Option";						
+						fin.owner = "com/chocohead/nsn/StackWalker$Option";
 					} else if (fin.owner.startsWith("java/lang/System$Logger")) {
 						fin.owner = fin.owner.replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger");
 					} else if (fin.owner.startsWith("java/net/http/")) {
@@ -1748,6 +1760,10 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					case "java/lang/IllegalCallerException":
 						tin.desc = "com/chocohead/nsn/IllegalCallerException";
+						break;
+					case "java/lang/StackWalker$Option":
+					case "java/lang/StackWalker$StackFrame":
+						tin.desc = "com/chocohead/nsn/StackWalker".concat(tin.desc.substring(21));
 						break;
 					default:
 						if (tin.desc.startsWith("java/net/http/")) {
