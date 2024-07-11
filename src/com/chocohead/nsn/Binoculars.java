@@ -1,8 +1,11 @@
 package com.chocohead.nsn;
 
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -58,5 +61,25 @@ public class Binoculars {
 				throw new IllegalStateException("Failed to define class for " + name + '?', e);
 			}
 		}
+	}
+
+	private static boolean isFinal(Class<?> definingClass, String name) throws NoSuchFieldException {
+		return Modifier.isFinal(definingClass.getDeclaredField(name).getModifiers());
+	}
+
+	public static VarHandle findVarHandle(Lookup context, Class<?> definingClass, String name, Class<?> type) throws NoSuchFieldException, IllegalAccessException {
+		return new VarHandle(false, context.findGetter(definingClass, name, type), isFinal(definingClass, name) ? null : context.findSetter(definingClass, name, type));
+	}
+
+	public static VarHandle findStaticVarHandle(Lookup context, Class<?> definingClass, String name, Class<?> type) throws NoSuchFieldException, IllegalAccessException {
+		return new VarHandle(true, context.findStaticGetter(definingClass, name, type), isFinal(definingClass, name) ? null : context.findStaticSetter(definingClass, name, type));
+	}
+
+	public static VarHandle unreflectVarHandle(Lookup context, Field field) throws IllegalAccessException {
+		return new VarHandle(Modifier.isStatic(field.getModifiers()), context.unreflectGetter(field), Modifier.isFinal(field.getModifiers()) ? null : context.unreflectSetter(field));
+	}
+
+	public static VarHandle arrayElementVarHandle(Class<?> arrayClass) {
+		return VarHandle.forArray(MethodHandles.arrayElementGetter(arrayClass), MethodHandles.arrayElementSetter(arrayClass));
 	}
 }

@@ -29,6 +29,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.TypeReference;
+import org.objectweb.asm.commons.InstructionAdapter;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -1280,17 +1281,176 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/lang/invoke/MethodHandles": {
-						if ("privateLookupIn".equals(min.name) && "(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "privateLookupIn(Ljava/lang/Class;Ljava/lang/invoke/MethodHandles$Lookup;)Ljava/lang/invoke/MethodHandles$Lookup;":
+						case "arrayElementVarHandle(Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;":
 							min.owner = "com/chocohead/nsn/Binoculars";
+							min.desc = min.desc.replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
+							break;
 						}
 						break;
 					}
 
 					case "java/lang/invoke/MethodHandles$Lookup": {
-						if ("defineClass".equals(min.name) && "([B)Ljava/lang/Class;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "defineClass([B)Ljava/lang/Class;":
+						case "findVarHandle(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;":
+						case "findStaticVarHandle(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;":
+						case "unreflectVarHandle(Ljava/lang/reflect/Field;)Ljava/lang/invoke/VarHandle;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "com/chocohead/nsn/Binoculars";
-							min.desc = "(Ljava/lang/invoke/MethodHandles$Lookup;[B)Ljava/lang/Class;";
+							min.desc = "(Ljava/lang/invoke/MethodHandles$Lookup;".concat(min.desc.substring(1).replace("java/lang/invoke/MethodHandles$Lookup$ClassOption", "com/chocohead/nsn/Binoculars$ClassOption").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle"));
+							break;
+						}
+						break;
+					}
+
+					case "java/lang/invoke/VarHandle": {
+						min.owner = "com/chocohead/nsn/VarHandle";
+						Type expectedReturn = Type.getReturnType(min.desc);
+						switch (min.name) {
+						case "get":
+						case "getVolatile": {
+							if (!min.desc.startsWith("()")) {
+								Type[] existing = Type.getArgumentTypes(min.desc);
+								existing[0] = InstructionAdapter.OBJECT_TYPE;
+								min.desc = Type.getMethodDescriptor(expectedReturn, existing);
+							}
+							if (!"java/lang/Object".equals(expectedReturn.getInternalName())) {
+								min.desc = Bytecode.changeDescriptorReturnType(min.desc, "Ljava/lang/Object;");
+
+								switch (expectedReturn.getSort()) {
+								case Type.BOOLEAN:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Boolean"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Boolean", "booleanValue", "()Z", false));
+									break;
+
+								case Type.BYTE:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Byte"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Byte", "byteValue", "()B", false));
+									break;
+
+								case Type.SHORT:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Short"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Short", "shortValue", "()S", false));
+									break;
+
+								case Type.CHAR:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Character"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Character", "charValue", "()C", false));
+									break;
+
+								case Type.INT:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Integer"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Integer", "intValue", "()I", false));
+									break;
+
+								case Type.LONG:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Long"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Long", "longValue", "()J", false));
+									break;
+
+								case Type.FLOAT:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Float"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Float", "floatValue", "()F", false));
+									break;
+
+								case Type.DOUBLE:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/Double"));
+									it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Double", "doubleValue", "()D", false));
+									break;
+
+								case Type.OBJECT:
+								case Type.ARRAY:
+									it.add(new TypeInsnNode(Opcodes.CHECKCAST, expectedReturn.getInternalName()));
+									break;
+
+								case Type.VOID:
+								case Type.METHOD:
+								default:
+									throw new AssertionError("Unexpected VarHandle return type: " + expectedReturn.getInternalName() + " (from " + min.desc + ')');
+								}
+							}
+							break;
+						}
+						case "set":
+						case "setRelease":
+						case "compareAndSet": {
+							Type[] existing = Type.getArgumentTypes(min.desc);
+							assert existing.length >= 1: min.owner + '#' + min.name + min.desc;
+							it.previous();
+							for (int i = existing[0].getSort() == Type.OBJECT ? 1 : existing[0].getSort() == Type.ARRAY ? 2 : 0, end = existing.length; i < end; i++) {
+								assert end - i <= 2;
+								if (i < end - 1) {
+									if (existing[i + 1].getSize() > 1) {
+										it.add(new InsnNode(existing[i].getSize() > 1 ? Opcodes.DUP2_X2 : Opcodes.DUP2_X1));
+										it.add(new InsnNode(Opcodes.POP2));
+									} else if (existing[i].getSize() > 1) {
+										it.add(new InsnNode(Opcodes.DUP_X2));
+										it.add(new InsnNode(Opcodes.POP));
+									} else {
+										it.add(new InsnNode(Opcodes.SWAP));
+									}
+								}
+								switch (existing[i].getSort()) {
+								case Type.BOOLEAN:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false));
+									break;
+
+								case Type.BYTE:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", false));
+									break;
+
+								case Type.SHORT:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;", false));
+									break;
+
+								case Type.CHAR:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Character", "valueOf", "(C)Ljava/lang/Character;", false));
+									break;
+
+								case Type.INT:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false));
+									break;
+
+								case Type.LONG:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false));
+									break;
+
+								case Type.FLOAT:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", false));
+									break;
+
+								case Type.DOUBLE:
+									it.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false));
+									break;
+
+								case Type.OBJECT:
+								case Type.ARRAY:
+									break;
+
+								case Type.VOID:
+								case Type.METHOD:
+								default:
+									throw new AssertionError("Unexpected VarHandle argument type: " + existing[i].getInternalName() + " (from " + min.desc + ')');
+								}
+								if (i < end - 1) {
+									if (existing[i + 1].getSize() > 1) {
+										it.add(new InsnNode(Opcodes.DUP_X2));
+										it.add(new InsnNode(Opcodes.POP));
+									} else {
+										it.add(new InsnNode(Opcodes.SWAP));
+									}
+								}
+							}
+							it.next();
+
+							Type[] args = new Type[existing.length];
+							Arrays.fill(args, InstructionAdapter.OBJECT_TYPE);
+							if (existing.length >= 3 && existing[0].getSort() == Type.ARRAY) args[1] = Type.INT_TYPE; //Array index
+							min.desc = Type.getMethodDescriptor(expectedReturn, args);
+							break;
+						}
 						}
 						break;
 					}
@@ -1424,6 +1584,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.owner = "com/chocohead/nsn/FiledSystems";
 							break;
 						}
+						break;
+					}
+
+					case "java/lang/IllegalCallerException": {
+						min.owner = "com/chocohead/nsn/IllegalCallerException";
 						break;
 					}
 
@@ -1574,6 +1739,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/util/SequencedMap":
 						tin.desc = "java/util/Map";
 						break;
+					case "java/lang/IllegalCallerException":
+						tin.desc = "com/chocohead/nsn/IllegalCallerException";
+						break;
 					default:
 						if (tin.desc.startsWith("java/net/http/")) {
 							tin.desc = tin.desc.replace("java/net/http/", "com/chocohead/nsn/http/");
@@ -1646,7 +1814,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		node.methods.addAll(extraMethods);
 
 		for (FieldNode field : node.fields) {
-			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger").replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/");
+			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
+					.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
 		}
 
 		for (Iterator<InnerClassNode> it = node.innerClasses.iterator(); it.hasNext();) {
