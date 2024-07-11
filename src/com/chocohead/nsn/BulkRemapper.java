@@ -1784,7 +1784,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					FieldInsnNode fin = (FieldInsnNode) insn;
 
 					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
-							.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/")
+							.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/").replace("java/lang/Record", "java/lang/Object")
 							.replace("java/lang/invoke/MethodHandles$Lookup$ClassOption", "com/chocohead/nsn/Binoculars$ClassOption").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
@@ -1898,7 +1898,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		node.methods.addAll(extraMethods);
 
 		for (FieldNode field : node.fields) {
-			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
+			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger").replace("java/lang/Record", "java/lang/Object")
 					.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
 		}
 
