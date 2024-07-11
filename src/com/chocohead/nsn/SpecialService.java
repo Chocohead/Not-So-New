@@ -344,6 +344,7 @@ public class SpecialService {
 			@Override
 			public ClassNode getClassNode(String name, boolean runTransformers) throws ClassNotFoundException, IOException {
 				switch (name) {
+				case "java/lang/MatchException":
 				case "java/lang/Record":
 				case "java/lang/StackWalker":
 				case "java/lang/runtime/SwitchBootstraps": {
