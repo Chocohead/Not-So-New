@@ -153,7 +153,7 @@ class HttpRequestImpl extends HttpRequest {
 		private boolean expectContinue;
 		private String method = "GET";
 		private URI uri;
-		private BodyPublisher body;
+		private BodyPublisher body = BodyPublishers.noBody();
 		private Duration timeout;
 
 		@Override
@@ -204,7 +204,7 @@ class HttpRequestImpl extends HttpRequest {
 
 		@Override
 		public Builder GET() {
-			return setMethod("GET", null);
+			return setMethod("GET", BodyPublishers.noBody());
 		}
 
 		@Override
@@ -219,20 +219,20 @@ class HttpRequestImpl extends HttpRequest {
 
 		@Override
 		public Builder DELETE() {
-			return setMethod("DELETE", null);
+			return setMethod("DELETE", BodyPublishers.noBody());
 		}
 
 		@Override
 		public Builder method(String method, BodyPublisher body) {
-			if (!VALID_METHODS.matcher(Objects.requireNonNull(method)).matches()) {
+			if (!VALID_METHODS.matcher(Objects.requireNonNull(method, "method")).matches()) {
 				throw new IllegalArgumentException("Invalid method: \"" + method + '"');
 			}
-			return setMethod(method, Objects.requireNonNull(body));
+			return setMethod(method, body);
 		}
 
 		private Builder setMethod(String method, BodyPublisher body) {
 			this.method = method;
-			this.body = body;
+			this.body = Objects.requireNonNull(body, "body");
 			return this;
 		}
 
@@ -247,6 +247,7 @@ class HttpRequestImpl extends HttpRequest {
 
 		@Override
 		public HttpRequest build() {
+			if (uri == null) throw new IllegalStateException("No URI provided");
 			return new HttpRequestImpl(headers, expectContinue, method, uri, body, timeout);
 		}
 

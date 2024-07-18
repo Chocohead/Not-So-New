@@ -601,8 +601,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 								for (int j = 0; j < args.length; j++) {
 									String desc = args[j].getDescriptor();
-									if (desc.contains("Ljava/lang/Record;") || desc.contains("Ljava/util/ServiceLoader$Provider;") || desc.contains("Ljava/lang/StackWalker$StackFrame;")) {
-										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;").replace("Ljava/lang/StackWalker$StackFrame;", "Lcom/chocohead/nsn/StackWalker$StackFrame;"));
+									if (desc.contains("Ljava/lang/Record;") || desc.contains("Ljava/util/ServiceLoader$Provider;") || desc.contains("Ljava/lang/StackWalker$StackFrame;") || desc.contains("Ljava/net/http/")) {
+										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;")
+												.replace("Ljava/lang/StackWalker$StackFrame;", "Lcom/chocohead/nsn/StackWalker$StackFrame;").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"));
 										madeChange = true;
 									}
 								}

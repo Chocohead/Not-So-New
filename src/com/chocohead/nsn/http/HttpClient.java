@@ -3,6 +3,8 @@ package com.chocohead.nsn.http;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
@@ -11,12 +13,22 @@ import java.util.concurrent.ExecutionException;
 import org.apache.commons.io.IOUtils;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpStatus;
+import org.apache.http.ProtocolException;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpHead;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.methods.RequestBuilder;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.DefaultRedirectStrategy;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.protocol.HttpContext;
 
 import com.chocohead.nsn.CompletableFutures;
 import com.chocohead.nsn.http.HttpResponse.BodyHandler;
@@ -24,7 +36,19 @@ import com.chocohead.nsn.http.HttpResponse.BodySubscriber;
 
 public abstract class HttpClient {
 	public interface Builder {
+		Builder version(Version version);
+
+		Builder followRedirects(Redirect policy);
+
 		HttpClient build();
+	}
+
+	public enum Version {
+		HTTP_1_1, HTTP_2;
+	}
+
+	public enum Redirect {
+		NEVER, ALWAYS, NORMAL;
 	}
 
 	protected HttpClient() {
@@ -38,6 +62,10 @@ public abstract class HttpClient {
 		return new HttpClientImpl.BuilderImpl();
 	}
 
+	public abstract Version version();
+
+	public abstract Redirect followRedirects();
+
 	public abstract <T> HttpResponse<T> send(HttpRequest request, BodyHandler<T> handler) throws IOException, InterruptedException;
 
 	public abstract <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, BodyHandler<T> handler);
@@ -45,14 +73,42 @@ public abstract class HttpClient {
 
 class HttpClientImpl extends HttpClient {
 	static class BuilderImpl implements Builder {
+		private Version version = Version.HTTP_2;
+		private Redirect redirect = Redirect.NEVER;
+
+		@Override
+		public Builder version(Version version) {
+			this.version = version;
+			return this;
+		}
+
+		@Override
+		public Builder followRedirects(Redirect policy) {
+			redirect = policy;
+			return this;
+		}
 
 		@Override
 		public HttpClient build() {
-			return new HttpClientImpl();
+			return new HttpClientImpl(version, redirect);
 		}
 	}
+	private final Version version;
+	private final Redirect redirect;
 
-	HttpClientImpl() {
+	HttpClientImpl(Version version, Redirect redirect) {
+		this.version = version;
+		this.redirect = redirect;
+	}
+
+	@Override
+	public Version version() {
+		return version;
+	}
+
+	@Override
+	public Redirect followRedirects() {
+		return redirect;
 	}
 
 	@Override
@@ -87,7 +143,53 @@ class HttpClientImpl extends HttpClient {
 
 	@Override
 	public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest outerRequest, BodyHandler<T> handler) {
-		CloseableHttpClient client = HttpClients.createDefault();
+		HttpClientBuilder clientBuilder = HttpClients.custom();
+		if (redirect == Redirect.NEVER) {
+			clientBuilder.disableRedirectHandling();
+		} else {
+			clientBuilder.setRedirectStrategy(new DefaultRedirectStrategy() {
+				@Override
+				public boolean isRedirected(org.apache.http.HttpRequest request, org.apache.http.HttpResponse response, HttpContext context) throws ProtocolException {
+			        switch (response.getStatusLine().getStatusCode()) {
+			        case HttpStatus.SC_MOVED_TEMPORARILY:
+			        case HttpStatus.SC_MOVED_PERMANENTLY:
+			        case HttpStatus.SC_TEMPORARY_REDIRECT:
+			        case 308: //Permanent redirect
+			        case HttpStatus.SC_SEE_OTHER: {
+			        	if (redirect == Redirect.ALWAYS) return true;
+
+		        		Object previousRedirects = context.removeAttribute(HttpClientContext.REDIRECT_LOCATIONS);
+		        		try {
+		        			URI redirectURI = getLocationURI(request, response, context);
+			        		URI requestURI = new URI(request.getRequestLine().getUri());
+			        		return requestURI.getScheme().equalsIgnoreCase(redirectURI.getScheme()) || "https".equalsIgnoreCase(redirectURI.getScheme());
+		        		} catch (URISyntaxException e) {
+		        			throw new ProtocolException(e.getMessage(), e);
+		        		} finally {
+		        			context.setAttribute(HttpClientContext.REDIRECT_LOCATIONS, previousRedirects);
+		        		}
+			        }
+			        default:
+			            return false;
+			        }
+				}
+
+				@Override
+				public HttpUriRequest getRedirect(org.apache.http.HttpRequest request, org.apache.http.HttpResponse response, HttpContext context) throws ProtocolException {
+					URI redirectURI = getLocationURI(request, response, context);
+
+					switch (response.getStatusLine().getStatusCode()) {
+					case HttpStatus.SC_MOVED_TEMPORARILY:
+			        case HttpStatus.SC_MOVED_PERMANENTLY:
+			        	if (!HttpPost.METHOD_NAME.equalsIgnoreCase(request.getRequestLine().getMethod())) break;
+			        case HttpStatus.SC_SEE_OTHER:
+						return HttpHead.METHOD_NAME.equalsIgnoreCase(request.getRequestLine().getMethod()) ? new HttpHead(redirectURI) : new HttpGet(redirectURI);
+					}
+					return RequestBuilder.copy(request).setUri(redirectURI).build();
+				}
+			});
+		}
+		CloseableHttpClient client = clientBuilder.build();
 		return CompletableFuture.completedFuture(outerRequest).thenComposeAsync(request -> {
 			RequestBuilder builder = RequestBuilder.create(request.method()).setUri(request.uri());
 			RequestConfig.Builder config = RequestConfig.custom().setExpectContinueEnabled(request.expectContinue());
@@ -108,7 +210,7 @@ class HttpClientImpl extends HttpClient {
 
 			request.timeout().ifPresent(timeout -> {//Hopefully no one has a timeout beyond 2.1B milliseconds (~24.8 days)
 				int millis = Math.toIntExact(timeout.toMillis());
-				config.setConnectTimeout(millis).setSocketTimeout(Math.toIntExact(millis));
+				config.setConnectTimeout(millis).setSocketTimeout(millis);
 			});
 
 			builder.setConfig(config.build());
