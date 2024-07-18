@@ -1748,8 +1748,42 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/time/Duration": {
-						if ("toSeconds".equals(min.name) && "()J".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "toNanosPart()I":
+							min.name = "getNano";
+							break;
+						case "toMillisPart()I":
+							min.name = "getNano";
+							it.add(new LdcInsnNode(1_000_000));
+							it.add(new InsnNode(Opcodes.IDIV));
+							break;
+						case "toSecondsPart()I":
 							min.name = "getSeconds";
+							min.desc = "()J";
+							it.add(new LdcInsnNode(60L));
+							it.add(new InsnNode(Opcodes.LREM));
+							it.add(new InsnNode(Opcodes.L2I));
+							break;
+						case "toSeconds()J":
+							min.name = "getSeconds";
+							break;
+						case "toMinutesPart()I":
+							min.name = "toMinutes";
+							min.desc = "()J";
+							it.add(new LdcInsnNode(60L));
+							it.add(new InsnNode(Opcodes.LREM));
+							it.add(new InsnNode(Opcodes.L2I));
+							break;
+						case "toHoursPart()I":
+							min.name = "toHours";
+							min.desc = "()J";
+							it.add(new LdcInsnNode(24L));
+							it.add(new InsnNode(Opcodes.LREM));
+							it.add(new InsnNode(Opcodes.L2I));
+							break;
+						case "toDaysPart()J":
+							min.name = "toDays";
+							break;
 						}
 						break;
 					}
