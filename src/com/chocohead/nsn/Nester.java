@@ -65,6 +65,7 @@ public class Nester {
 		final Set<String> toTransform = new HashSet<>(4096);
 		final Set<String> pluginClasses = new HashSet<>(32);
 		final Map<String, List<Supplier<String>>> interfaceTargets = new HashMap<>(64);
+		final Map<String, Set<CollectionMethod>> newLists = new HashMap<>(8);
 		Map<String, List<Member>> nests = new HashMap<>(128);
 		Map<String, List<MixinMember>> mixinNests = new HashMap<>(8);
 		CompletableFuture<Map<String, Consumer<ClassNode>>> nestTransforms;
@@ -83,6 +84,10 @@ public class Nester {
 
 		public Map<String, List<Supplier<String>>> getInterfaceTargets() {
 			return Collections.unmodifiableMap(interfaceTargets);
+		}
+
+		public Map<String, Set<CollectionMethod>> getNewLists() {
+			return Collections.unmodifiableMap(newLists);
 		}
 
 		private static <M extends Member, T, R> CompletableFuture<R> scheduleNesting(Collection<? extends Collection<M>> systems, Function<Collection<M>, T> nester, Function<CompletableFuture<T>[], R> then) {
@@ -375,6 +380,10 @@ public class Nester {
 
 								if (!checker.isMixin()) {
 									result.toTransform.add(name);
+
+									if (checker.isCollection()) {
+										result.newLists.put(name, checker.getCollectionMethods());
+									}
 
 									if (checker.isMixinPlugin()) {
 										for (String pluginClass : checker.getPluginClasses()) {

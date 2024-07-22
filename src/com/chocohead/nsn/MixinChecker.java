@@ -1,9 +1,11 @@
 package com.chocohead.nsn;
 
+import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -150,6 +152,7 @@ public class MixinChecker extends ClassVisitor {
 		}
 	};
 	private String name;
+	private Set<CollectionMethod> collectionMethods;
 	private final List<Supplier<String>> targets = new ArrayList<>();
 	private boolean isMixin, isPlugin, isExtension;
 	private String nestHost;
@@ -165,6 +168,10 @@ public class MixinChecker extends ClassVisitor {
 	@Override
 	public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
 		this.name = name;
+
+		if ("java/util/AbstractList".equals(superName)) {
+			collectionMethods = EnumSet.allOf(CollectionMethod.class);
+		}
 
 		for (String interfaceName : interfaces) {
 			if (PLUGIN.equals(interfaceName)) {
@@ -199,6 +206,7 @@ public class MixinChecker extends ClassVisitor {
 
 	@Override
 	public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+		if (collectionMethods != null && Modifier.isPublic(access)) collectionMethods.remove(CollectionMethod.forDesc(name, descriptor));
 		if (!isPlugin) return null;
 		visitedMethod = name.concat(descriptor);
 		return pluginVisitor;
@@ -223,6 +231,14 @@ public class MixinChecker extends ClassVisitor {
 			pluginTypes.addAll(references.usedTypes);
 			usedMethods.addAll(references.usedMethods);
 		}
+	}
+
+	public boolean isCollection() {
+		return collectionMethods != null && !collectionMethods.isEmpty();
+	}
+
+	public Set<CollectionMethod> getCollectionMethods() {
+		return Collections.unmodifiableSet(collectionMethods);
 	}
 
 	public boolean isMixin() {
@@ -263,6 +279,7 @@ public class MixinChecker extends ClassVisitor {
 
 	public void reset() {
 		name = null;
+		collectionMethods = null;
 		isMixin = false;
 		isPlugin = false;
 		targets.clear();

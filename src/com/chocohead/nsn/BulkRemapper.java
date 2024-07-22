@@ -60,6 +60,7 @@ import com.chocohead.nsn.Nester.ScanResult;
 public class BulkRemapper implements IMixinConfigPlugin {
 	static final Map<String, Set<String>> HUMBLE_INTERFACES = new HashMap<>(64);
 	private static final Map<String, List<Consumer<ClassNode>>> EXTRA_ACCESS = new HashMap<>(4);
+	private static final Map<String, Set<CollectionMethod>> NEW_LISTS = new HashMap<>(8);
 	static ScanResult toTransform = Nester.run();
 
 	@Override
@@ -78,6 +79,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				EXTRA_ACCESS.computeIfAbsent(target.get(), k -> new ArrayList<>(1)).add(transformer);
 			}
 		}
+		NEW_LISTS.putAll(toTransform.getNewLists());
 
 		mixinPackage = mixinPackage.replace('.', '/');
 		generateMixin(mixinPackage.concat("SuperMixin"), toTransform.getMixinTargets());
@@ -1928,6 +1930,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 					}
 				}
+			}
+		}
+		Set<CollectionMethod> collectionMethods = NEW_LISTS.get(node.name);
+		if (collectionMethods != null) {
+			for (CollectionMethod method : collectionMethods) {
+				extraMethods.add(method.makeMethod());
 			}
 		}
 		node.methods.addAll(extraMethods);
