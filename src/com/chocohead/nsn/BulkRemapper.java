@@ -369,6 +369,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			if (method.desc.contains("Ljava/util/SequencedCollection;")) {
 				method.desc = method.desc.replace("Ljava/util/SequencedCollection;", "Ljava/util/Collection;");
 			}
+			if (method.desc.contains("Ljava/util/SequencedSet;")) {
+				method.desc = method.desc.replace("Ljava/util/SequencedSet;", "Ljava/util/Set;");
+			}
 			if (method.desc.contains("Ljava/util/SequencedMap;")) {
 				method.desc = method.desc.replace("Ljava/util/SequencedMap;", "Ljava/util/Map;");
 			}
@@ -385,6 +388,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					if (idin.desc.contains("Ljava/lang/Record;")) {
 						idin.desc = idin.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;");
+					}
+					if (idin.desc.contains("Ljava/util/SequencedSet;")) {
+						idin.desc = idin.desc.replace("Ljava/util/SequencedSet;", "Ljava/util/Set;");
 					}
 
 					switch (idin.bsm.getOwner()) {
@@ -876,6 +882,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/Collections": {
+						if ("unmodifiableSequencedSet".equals(min.name) && "(Ljava/util/SequencedSet;)Ljava/util/SequencedSet;".equals(min.desc)) {
+							min.name = "unmodifiableSet";
+							min.desc = "(Ljava/util/Set;)Ljava/util/Set;";
+						}
+						break;
+					}
+
 					case "java/util/Collection":
 					case "java/util/Deque": {
 						if ("toArray".equals(min.name) && "(Ljava/util/function/IntFunction;)[Ljava/lang/Object;".equals(min.desc)) {
@@ -976,6 +990,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							doToArray(it, min);
 							break;
 						}
+						break;
+					}
+
+					case "java/util/SequencedSet": {
+						min.owner = "java/util/Set";
 						break;
 					}
 
@@ -1195,7 +1214,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/SequencedMap": {
-						min.owner = "java/util/Map";
+						if ("pollFirstEntry".equals(min.name) && "()Ljava/util/Map$Entry;".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Maps";
+							min.desc = "(Ljava/util/Map;)Ljava/util/Map$Entry;";
+							min.itf = false;
+						} else {
+							min.owner = "java/util/Map";
+						}
 						break;
 					}
 
@@ -1750,6 +1776,18 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/Thread": {
+						switch (min.name.concat(min.desc)) {
+						case "threadId()J":
+							min.name = "getId"; //Not final like threadId, but if we can get away without checking if it's overridden...
+							break;
+						case "sleep(Ljava/time/Duration;)V":
+							min.owner = "org/apache/commons/lang3/ThreadUtils";
+							break;
+						}
+						break;
+					}
+
 					case "java/time/Duration": {
 						switch (min.name.concat(min.desc)) {
 						case "toNanosPart()I":
@@ -1811,7 +1849,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						if (min.owner.startsWith("java/net/http/")) {
 							min.owner = min.owner.replace("java/net/http/", "com/chocohead/nsn/http/");
 						}
-						min.desc = min.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("java/util/SequencedMap", "java/util/Map").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/");
+						min.desc = min.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/SequencedSet;", "Ljava/util/Set;")
+								.replace("java/util/SequencedMap", "java/util/Map").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/");
 						break;
 					}
 					break;
