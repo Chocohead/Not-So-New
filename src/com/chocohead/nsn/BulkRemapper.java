@@ -1577,6 +1577,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "nullInputStream()Ljava/io/InputStream;": //An inexact replicate in terms of close behaviour, but good enough
 							it.previous();
 							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/NullInputStream"));
+							it.add(new InsnNode(Opcodes.DUP));
 							it.add(new InsnNode(Opcodes.LCONST_0));
 							it.add(new InsnNode(Opcodes.ICONST_0));
 							it.add(new InsnNode(Opcodes.ICONST_0));
@@ -1620,6 +1621,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						if ("nullReader".equals(min.name) && "()Ljava/io/Reader;".equals(min.desc)) {
 							it.previous();
 							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/NullReader"));
+							it.add(new InsnNode(Opcodes.DUP));
 							it.add(new InsnNode(Opcodes.LCONST_0));
 							it.add(new InsnNode(Opcodes.ICONST_0));
 							it.add(new InsnNode(Opcodes.ICONST_0));
@@ -1635,10 +1637,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/io/Writer": {
 						if ("nullWriter".equals(min.name) && "()Ljava/io/Writer;".equals(min.desc)) {
 							it.previous();
-							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/NullWriter"));
+							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/output/NullWriter"));
+							it.add(new InsnNode(Opcodes.DUP));
 							it.next();
 							min.setOpcode(Opcodes.INVOKESPECIAL);
-							min.owner = "org/apache/commons/io/input/NullWriter";
+							min.owner = "org/apache/commons/io/output/NullWriter";
 							min.name = "<init>";
 							min.desc = "()V";
 						}
