@@ -538,6 +538,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								case "of()Ljava/util/Set;":
 									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "java/util/Collections", "emptySet", handle.getDesc(), false);
 									break;
+
+								case "copyOf(Ljava/util/Collection;)Ljava/util/Set;":
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/google/common/collect/ImmutableSet", handle.getName(),
+											"(Ljava/util/Collection;)Lcom/google/common/collect/ImmutableSet;", false);
+									break;
 								}
 								break;
 							}
