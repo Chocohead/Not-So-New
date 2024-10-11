@@ -1846,6 +1846,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/net/URLEncoder": {
+						if ("encode".equals(min.name) && "(Ljava/lang/String;Ljava/nio/charset/Charset;)Ljava/lang/String;".equals(min.desc)) {
+							it.previous();
+							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/nio/charset/Charset", "name", "()Ljava/lang/String;", false));
+							it.next();
+							min.desc = "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;";
+						}
+						break;
+					}
+
 					case "javax/xml/parsers/DocumentBuilderFactory": {
 						if ("newDefaultInstance".equals(min.name) && "()Ljavax/xml/parsers/DocumentBuilderFactory;".equals(min.desc)) {
 							min.name = "newInstance"; //Close enough, it's unlikely any of the overrides would be set
