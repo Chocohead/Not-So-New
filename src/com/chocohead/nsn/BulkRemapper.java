@@ -775,6 +775,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/lang/Math": {
 						switch (min.name.concat(min.desc)) {
 						case "floorMod(JI)I":
+						case "fma(DDD)D":
+						case "fma(FFF)F":
 							min.owner = "com/chocohead/nsn/Maths";
 							break;
 
