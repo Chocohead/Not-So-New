@@ -27,7 +27,7 @@ jobs:
         gradle-version: 4.9
         arguments: build --no-daemon --stacktrace --info
     - name: Upload artifacts
-      uses: actions/upload-artifact@v2.1.4
+      uses: actions/upload-artifact@v4.4.3
       with:
         name: Not-So-New
         path: build/libs/NotSoNew-*.*.jar
