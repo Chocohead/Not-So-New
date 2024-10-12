@@ -20,7 +20,17 @@ public class Persuasion implements LanguageAdapter {
 		real = JavaVersion.current();
 		set(21);
 
-		MixinBootstrap.getPlatform().addContainer(new IContainerHandle() {			
+		MixinBootstrap.getPlatform().addContainer(new IContainerHandle() {
+			@Override
+			public String getId() {
+				return "nsn";
+			}
+
+			@Override
+			public String getDescription() {
+				return "Not So New early mixin injector";
+			}
+
 			@Override
 			public Collection<IContainerHandle> getNestedContainers() {
 				return Collections.emptySet();

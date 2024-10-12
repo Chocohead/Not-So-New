@@ -336,13 +336,7 @@ public class SpecialService {
 		}).handling("getBytecodeProvider", IClassBytecodeProvider.class, new ClassBytecodeProvider() {
 			private final IClassBytecodeProvider classSource = MixinService.getService().getBytecodeProvider();
 
-			@Override
-			public ClassNode getClassNode(String name) throws ClassNotFoundException, IOException {
-				return getClassNode(name, true);
-			}
-
-			@Override
-			public ClassNode getClassNode(String name, boolean runTransformers) throws ClassNotFoundException, IOException {
+			private ClassNode substituteClassNode(String name) {
 				switch (name) {
 				case "java/lang/MatchException":
 				case "java/lang/Record":
@@ -352,9 +346,27 @@ public class SpecialService {
 					out.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, name, null, "java/lang/Object", null);
 					return out;
 				}
+				default:
+					return null;
 				}
+			}
 
-				return classSource.getClassNode(name, runTransformers);
+			@Override
+			public ClassNode getClassNode(String name) throws ClassNotFoundException, IOException {
+				ClassNode out = substituteClassNode(name);
+				return out != null ? out : classSource.getClassNode(name);
+			}
+
+			@Override
+			public ClassNode getClassNode(String name, boolean runTransformers) throws ClassNotFoundException, IOException {
+				ClassNode out = substituteClassNode(name);
+				return out != null ? out : classSource.getClassNode(name, runTransformers);
+			}
+
+			@Override
+			public ClassNode getClassNode(String name, boolean runTransformers, int readerFlags) throws ClassNotFoundException, IOException {
+				ClassNode out = substituteClassNode(name);
+				return out != null ? out : classSource.getClassNode(name, runTransformers, readerFlags);
 			}
 		}).handling("getClassTracker", IClassTracker.class, () -> null).make();
 
