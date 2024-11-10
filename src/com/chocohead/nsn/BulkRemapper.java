@@ -2098,9 +2098,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			it.add(new InsnNode(Opcodes.ICONST_0));
 			it.add(new InsnNode(Opcodes.SWAP));
 			it.next();
+			min.name = "add";
 			min.desc = "(ILjava/lang/Object;)V";
+			break;
+
 		case "addLast(Ljava/lang/Object;)V":
 			min.name = "add";
+			min.desc = "(Ljava/lang/Object;)Z";
+			it.add(new InsnNode(Opcodes.POP));
 			break;
 
 		case "getFirst()Ljava/lang/Object;":
