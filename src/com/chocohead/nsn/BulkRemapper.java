@@ -1694,6 +1694,12 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/util/HexFormat": {
+						min.owner = "com/chocohead/nsn/Hexed";
+						min.desc = min.desc.replace("Ljava/util/HexFormat;", "Lcom/chocohead/nsn/Hexed;");
+						break;
+					}
+
 					case "java/lang/IllegalCallerException": {
 						min.owner = "com/chocohead/nsn/IllegalCallerException";
 						break;
@@ -1884,7 +1890,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
 							.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/").replace("java/lang/Record", "java/lang/Object")
-							.replace("java/lang/invoke/MethodHandles$Lookup$ClassOption", "com/chocohead/nsn/Binoculars$ClassOption").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
+							.replace("java/lang/invoke/MethodHandles$Lookup$ClassOption", "com/chocohead/nsn/Binoculars$ClassOption").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle")
+							.replace("java/util/HexFormat", "com/chocohead/nsn/Hexed");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
 						fin.owner = "com/chocohead/nsn/StackWalker$Option";
@@ -2003,8 +2010,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		node.methods.addAll(extraMethods);
 
 		for (FieldNode field : node.fields) {
-			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger").replace("java/lang/Record", "java/lang/Object")
-					.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle");
+			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
+					.replace("java/lang/Record", "java/lang/Object").replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/")
+					.replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle").replace("java/util/HexFormat", "com/chocohead/nsn/Hexed");
 		}
 
 		for (Iterator<InnerClassNode> it = node.innerClasses.iterator(); it.hasNext();) {
