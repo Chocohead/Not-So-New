@@ -474,9 +474,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						if (idin.bsmArgs[i] instanceof Handle) {
 							Handle handle = (Handle) idin.bsmArgs[i];
 
-							if (handle.getDesc().contains("Ljava/lang/Record;") || handle.getDesc().contains("Ljava/util/ServiceLoader$Provider;")) {
+							if (handle.getDesc().contains("Ljava/lang/Record;") || handle.getDesc().contains("Ljava/util/ServiceLoader$Provider;") || handle.getDesc().contains("Ljava/util/SequencedSet;")) {
 								idin.bsmArgs[i] = handle = new Handle(handle.getTag(), handle.getOwner(), handle.getName(),
-										handle.getDesc().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;"), handle.isInterface());
+										handle.getDesc().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;").replace("Ljava/util/SequencedSet;", "Ljava/util/Set;"), handle.isInterface());
 							}
 
 							switch (handle.getOwner()) {
@@ -597,15 +597,30 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 								for (int j = 0; j < args.length; j++) {
 									String desc = args[j].getDescriptor();
-									if (desc.contains("Ljava/lang/Record;") || desc.contains("Ljava/util/ServiceLoader$Provider;") || desc.contains("Ljava/lang/StackWalker$StackFrame;") || desc.contains("Ljava/net/http/")) {
+									if (desc.contains("Ljava/lang/Record;") || desc.contains("Ljava/util/ServiceLoader$Provider;") || desc.contains("Ljava/lang/StackWalker$StackFrame;") || desc.contains("Ljava/net/http/") || desc.contains("Ljava/util/SequencedSet;")) {
 										args[j] = Type.getType(desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;")
-												.replace("Ljava/lang/StackWalker$StackFrame;", "Lcom/chocohead/nsn/StackWalker$StackFrame;").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"));
+												.replace("Ljava/lang/StackWalker$StackFrame;", "Lcom/chocohead/nsn/StackWalker$StackFrame;").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/").replace("Ljava/util/SequencedSet;", "Ljava/util/Set;"));
 										madeChange = true;
 									}
 								}
-								if ("java/lang/Record".equals(returnType.getInternalName()) || "Ljava/util/ServiceLoader$Provider;".equals(returnType.getInternalName()) || returnType.getInternalName().startsWith("java/net/http/")) {
-									returnType = Type.getType(returnType.getDescriptor().replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"));
+								switch (returnType.getInternalName()) {
+								case "java/lang/Record":
+									returnType = Type.getObjectType("java/lang/Object");
 									madeChange = true;
+									break;
+								case "java/util/ServiceLoader$Provider":
+									returnType = Type.getObjectType("com/chocohead/nsn/ServiceLoaders$Provider");
+									madeChange = true;
+									break;
+								case "java/util/SequencedSet":
+									returnType = Type.getObjectType("java/util/Set");
+									madeChange = true;
+									break;
+								default:
+									if (returnType.getInternalName().startsWith("java/net/http/")) {
+										returnType = Type.getType(returnType.getDescriptor().replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"));
+										madeChange = true;
+									}
 								}
 
 								if (madeChange) idin.bsmArgs[i] = Type.getMethodType(returnType, args);
@@ -1874,7 +1889,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
 							.replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/").replace("java/lang/Record", "java/lang/Object")
 							.replace("java/lang/invoke/MethodHandles$Lookup$ClassOption", "com/chocohead/nsn/Binoculars$ClassOption").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle")
-							.replace("java/util/HexFormat", "com/chocohead/nsn/Hexed");
+							.replace("java/util/HexFormat", "com/chocohead/nsn/Hexed").replace("java/util/SequencedSet", "java/util/Set");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
 						fin.owner = "com/chocohead/nsn/StackWalker$Option";
@@ -1995,7 +2010,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		for (FieldNode field : node.fields) {
 			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
 					.replace("java/lang/Record", "java/lang/Object").replace("java/util/SequencedMap", "java/util/Map").replace("java/net/http/", "com/chocohead/nsn/http/")
-					.replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle").replace("java/util/HexFormat", "com/chocohead/nsn/Hexed");
+					.replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle").replace("java/util/HexFormat", "com/chocohead/nsn/Hexed").replace("java/util/SequencedSet", "java/util/Set");
 		}
 
 		for (Iterator<InnerClassNode> it = node.innerClasses.iterator(); it.hasNext();) {
