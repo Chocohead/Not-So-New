@@ -426,6 +426,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								}
 							}
 
+							for (int i = 0; i < fields.length; i++) {
+								Handle field = fields[i];
+								String desc = field.getDesc().replace("Ljava/util/SequencedSet;", "Ljava/util/Set;");
+
+								if (!field.getDesc().equals(desc)) {
+									fields[i] = new Handle(field.getTag(), field.getOwner(), field.getName(), desc, field.isInterface());
+								}
+							}
+
 							MethodNode implementation;
 							switch (idin.name) {
 							case "equals":
@@ -999,7 +1008,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/SequencedSet": {
-						min.owner = "java/util/Set";
+						if ("getFirst".equals(min.name) && "()Ljava/lang/Object;".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Sets";
+							min.desc = "(Ljava/util/Set;)Ljava/lang/Object;";
+							min.itf = false;
+						} else {
+							min.owner = "java/util/Set";
+						}
 						break;
 					}
 

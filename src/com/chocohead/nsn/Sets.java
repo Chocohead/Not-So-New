@@ -1,5 +1,6 @@
 package com.chocohead.nsn;
 
+import java.util.NavigableSet;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
@@ -52,5 +53,13 @@ public class Sets {
 	@SafeVarargs
 	public static <T> Set<T> of(T... elements) {
 		return checkDuplicates(ImmutableSet.copyOf(elements), elements.length);
+	}
+
+	public static <T> T getFirst(Set<T> self) {
+		if (self instanceof NavigableSet<?>) {
+			return ((NavigableSet<T>) self).first();
+		} else {
+			return self.iterator().next();
+		}
 	}
 }
