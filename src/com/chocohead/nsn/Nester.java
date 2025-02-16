@@ -400,6 +400,12 @@ public class Nester {
 										result.interfaceTargets.computeIfAbsent(name, k -> new ArrayList<>(4)).addAll(checker.getLazyTargets());
 									}
 
+									if (checker.hasCustomInjectionPoints()) {
+										for (String injectionPoint : checker.getCustomInjectionPoints()) {
+											pluginClasses.merge(injectionPoint, Boolean.FALSE, (seen, neverSeen) -> seen);
+										}
+									}
+
 									if (checker.inNestedSystem()) {
 										result.mixinNests.computeIfAbsent(checker.isNestHost() ? name : checker.getNestHost(), k -> new ArrayList<>()).add(new MixinMember(reader, checker));
 									}

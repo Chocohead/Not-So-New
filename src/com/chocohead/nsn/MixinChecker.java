@@ -28,6 +28,7 @@ import org.spongepowered.asm.mixin.Mixins;
 import org.spongepowered.asm.mixin.MixinEnvironment.Option;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfig;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
+import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.refmap.IClassReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.IReferenceMapper;
 import org.spongepowered.asm.mixin.refmap.ReferenceMapper;
@@ -61,6 +62,7 @@ public class MixinChecker extends ClassVisitor {
 		}
 	}
 	private static final String TARGET = Type.getDescriptor(Mixin.class);
+	private static final String POSITION = Type.getDescriptor(At.class);
 	private static final String PLUGIN = Type.getInternalName(IMixinConfigPlugin.class);
 	private static final String EXTENSION = Type.getInternalName(IExtension.class);
 	private final AnnotationVisitor mixinVisitor = new AnnotationVisitor(api) {
@@ -124,6 +126,32 @@ public class MixinChecker extends ClassVisitor {
 			}
 		}
 	};
+	private final MethodVisitor mixinMethodVisitor = new MethodVisitor(api) {
+		private final AnnotationVisitor deeperAnnotationVisitor = new AnnotationVisitor(api) {
+			private final AnnotationVisitor positionVisitor = new AnnotationVisitor(api) {
+				@Override
+				public void visit(String name, Object value) {
+					if ("value".equals(name)) {
+						assert value instanceof String: value == null ? "null" : value.getClass();
+						String injectionPointClass = (String) value;
+
+						//Unregistered injection points will be loaded by InjectionPoint#findClass
+						if (injectionPointClass.indexOf('.') > 0) customInjectionPoints.add(injectionPointClass.replace('.', '/'));
+					}
+				}
+			};
+
+			@Override
+			public AnnotationVisitor visitAnnotation(String name, String descriptor) {
+				return POSITION.equals(descriptor) ? positionVisitor : null;
+			}
+		};
+
+		@Override
+		public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
+			return visible ? deeperAnnotationVisitor : null;
+		}
+	};
 	private final MethodVisitor pluginVisitor = new TypeSpectator() {
 		private final Set<Type> seenTypes = new HashSet<>();
 		private final Set<String> usedMethods = new HashSet<>();
@@ -155,6 +183,7 @@ public class MixinChecker extends ClassVisitor {
 	private Set<CollectionMethod> collectionMethods;
 	private final List<Supplier<String>> targets = new ArrayList<>();
 	private boolean isMixin, isPlugin, isExtension;
+	private final Set<String> customInjectionPoints = new HashSet<>();
 	private String nestHost;
 	private final Set<String> nestMates = new HashSet<>();
 	private String visitedMethod;
@@ -207,6 +236,7 @@ public class MixinChecker extends ClassVisitor {
 	@Override
 	public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
 		if (collectionMethods != null && Modifier.isPublic(access)) collectionMethods.remove(CollectionMethod.forDesc(name, descriptor));
+		if (isMixin) return mixinMethodVisitor;
 		if (!isPlugin) return null;
 		visitedMethod = name.concat(descriptor);
 		return pluginVisitor;
@@ -253,6 +283,14 @@ public class MixinChecker extends ClassVisitor {
 		return Collections.unmodifiableCollection(targets);
 	}
 
+	public boolean hasCustomInjectionPoints() {
+		return !customInjectionPoints.isEmpty();
+	}
+
+	public Set<String> getCustomInjectionPoints() {
+		return Collections.unmodifiableSet(customInjectionPoints);
+	}
+
 	public boolean isMixinPlugin() {
 		return isPlugin;
 	}
@@ -283,6 +321,7 @@ public class MixinChecker extends ClassVisitor {
 		isMixin = false;
 		isPlugin = false;
 		targets.clear();
+		customInjectionPoints.clear();
 		nestHost = null;
 		nestMates.clear();
 		isExtension = false;
