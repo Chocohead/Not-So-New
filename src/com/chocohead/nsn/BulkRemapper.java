@@ -349,6 +349,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			if (method.desc.contains("Ljava/util/ServiceLoader$Provider;")) {
 				method.desc = method.desc.replace("Ljava/util/ServiceLoader$Provider;", "Lcom/chocohead/nsn/ServiceLoaders$Provider;");
 			}
+			if (method.desc.contains("Ljava/lang/StackWalker")) {
+				method.desc = method.desc.replace("Ljava/lang/StackWalker", "Lcom/chocohead/nsn/StackWalker");
+			}
 			if (method.desc.contains("Ljava/util/SequencedCollection;")) {
 				method.desc = method.desc.replace("Ljava/util/SequencedCollection;", "Ljava/util/Collection;");
 			}
@@ -471,7 +474,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						}
 
 						case "enumSwitch": {
-							//Will be needed in future...
+							MethodNode implementation = Switchy.enumSwitch(Type.getMethodType(idin.desc), idin.bsmArgs);
+							if (implementation != null) {
+								it.set(new MethodInsnNode(Opcodes.INVOKESTATIC, node.name, implementation.name, implementation.desc, isInterface));
+								extraMethods.add(implementation);
+							} else {
+								idin.bsm = new Handle(Opcodes.H_INVOKESTATIC, "com/chocohead/nsn/Switchy", "enumSwitch",
+										"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/String;)Ljava/lang/invoke/CallSite;", false);
+							} 
 							break;
 						}
 						}
@@ -1583,6 +1593,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						case "requireNonNullElseGet(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;":
 						case "checkFromIndexSize(III)I":
 							min.owner = "com/chocohead/nsn/MoreObjects";
+							break;
+
+						case "checkIndex(II)I":
+							min.owner = "com/google/common/base/Preconditions";
+							min.name = "checkElementIndex";
 							break;
 						}
 						break;
