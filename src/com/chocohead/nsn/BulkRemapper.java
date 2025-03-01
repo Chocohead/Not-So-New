@@ -1038,8 +1038,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/lang/Character": {
-						if ("toString".equals(min.name) && "(I)Ljava/lang/String;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "toString(I)Ljava/lang/String;":
+						case "codePointOf(Ljava/lang/String;)I":
 							min.owner = "com/chocohead/nsn/Characters";
+							break;
 						}
 						break;
 					}
