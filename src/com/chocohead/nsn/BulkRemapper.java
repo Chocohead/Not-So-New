@@ -51,8 +51,6 @@ import org.spongepowered.asm.mixin.transformer.ext.Extensions;
 import org.spongepowered.asm.util.Bytecode;
 
 import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.SemanticVersion;
-import net.fabricmc.loader.api.VersionParsingException;
 
 import com.chocohead.mm.api.ClassTinkerers;
 import com.chocohead.nsn.Nester.ScanResult;
@@ -222,13 +220,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 	@Override
 	public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-		return !"com.chocohead.nsn.mixins.MainMixin".equals(mixinClassName) || !FabricLoader.getInstance().getModContainer("minecraft").filter(mod -> {
-			try {
-				return SemanticVersion.parse("1.19.1").compareTo(mod.getMetadata().getVersion()) <= 0;
-			} catch (VersionParsingException e) {
-				throw new IllegalStateException("Failed to create valid SemVer?", e);
-			}
-		}).isPresent();
+		return true;
 	}
 
 	@Override
