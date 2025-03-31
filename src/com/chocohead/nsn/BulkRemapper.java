@@ -583,6 +583,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								break;
 							}
 
+							case "java/util/ServiceLoader$Provider": {
+								idin.bsmArgs[i] = new Handle(handle.getTag(), "com/chocohead/nsn/ServiceLoaders$Provider", handle.getName(), handle.getDesc(), handle.isInterface());
+								break;
+							}
+
 							default: {
 								if (handle.getOwner().startsWith("java/net/http/")) {
 									idin.bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner().replace("java/net/http/", "com/chocohead/nsn/http/"), handle.getName(), handle.getDesc().replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"), handle.isInterface());
