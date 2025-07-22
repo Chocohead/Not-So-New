@@ -968,7 +968,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/ArrayList":
-					case "it/unimi/dsi/fastutil/objects/ObjectList": {
+					case "it/unimi/dsi/fastutil/objects/ObjectList":
+					case "it/unimi/dsi/fastutil/objects/ReferenceList": {
 						doListSequencedCollection(it, min);
 						break;
 					}
