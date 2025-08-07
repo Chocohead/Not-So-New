@@ -4,6 +4,10 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 public class Lists {
+	public static <T> void addFirst(List<T> list, T thing) {
+		list.add(0, thing);
+	}
+
 	public static <T> T getFirst(List<T> list) {
 		if (list.isEmpty()) throw new NoSuchElementException();
 		return list.get(0);
