@@ -794,6 +794,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/Integer": {
+						switch (min.name.concat(min.desc)) {
+						case "parseInt(Ljava/lang/CharSequence;III)I":
+						case "parseUnsignedInt(Ljava/lang/CharSequence;III)I":
+							min.owner = "com/chocohead/nsn/Integers";
+							break;
+						}
+						break;
+					}
+
 					case "java/lang/Math": {
 						switch (min.name.concat(min.desc)) {
 						case "floorMod(JI)I":
