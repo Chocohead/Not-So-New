@@ -348,12 +348,12 @@ public class SpecialService {
 				}
 				case "java/util/SequencedSet": {
 					ClassNode out = new ClassNode();
-					out.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, name, null, "java/util/Set", null);
+					out.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_INTERFACE | Opcodes.ACC_SUPER, name, null, "java/util/Set", null);
 					return out;
 				}
 				case "java/util/SequencedMap": {
 					ClassNode out = new ClassNode();
-					out.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, name, null, "java/util/Map", null);
+					out.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_INTERFACE | Opcodes.ACC_SUPER, name, null, "java/util/Map", null);
 					return out;
 				}
 				default:

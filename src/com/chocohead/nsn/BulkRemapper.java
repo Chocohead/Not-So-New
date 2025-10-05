@@ -35,6 +35,7 @@ import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
@@ -1996,7 +1997,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					break;
 				}
 
-				case AbstractInsnNode.LDC_INSN:
+				case AbstractInsnNode.LDC_INSN: {
 					LdcInsnNode ldc = (LdcInsnNode) insn;
 
 					if (ldc.cst instanceof ConstantDynamic) {
@@ -2027,6 +2028,20 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.remove();
 						}
 					}
+					break;
+				}
+
+				case AbstractInsnNode.FRAME: {
+					FrameNode frame = (FrameNode) insn;
+
+					if (frame.stack != null) {
+						frame.stack.replaceAll(stack -> "java/lang/Record".equals(stack) ? "java/lang/Object" : stack);
+					}
+					if (frame.local != null) {
+						frame.local.replaceAll(local -> "java/lang/Record".equals(local) ? "java/lang/Object" : local);
+					}
+					break;
+				}
 				}
 			}
 		}
