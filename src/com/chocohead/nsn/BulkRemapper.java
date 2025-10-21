@@ -1670,6 +1670,23 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/io/PrintStream": {
+						switch (min.name.concat(min.desc)) {
+						case "<init>(Ljava/io/OutputStream;ZLjava/nio/charset/Charset;)V":
+						case "<init>(Ljava/lang/String;Ljava/nio/charset/Charset;)V":
+						case "<init>(Ljava/io/File;Ljava/nio/charset/Charset;)V":
+							it.previous();
+							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/nio/charset/Charset", "name", "()Ljava/lang/String;", false));
+							it.next();
+							min.desc = min.desc.replace("Ljava/nio/charset/Charset;)V", "Ljava/lang/String;)V");
+							break;
+						case "writeBytes([B)V":
+							min.name = "write";
+							break;
+						}
+						break;
+					}
+
 					case "java/io/Reader": {
 						if ("nullReader".equals(min.name) && "()Ljava/io/Reader;".equals(min.desc)) {
 							it.previous();
