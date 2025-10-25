@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -61,6 +63,7 @@ import net.fabricmc.loader.impl.FabricLoaderImpl;
 import com.chocohead.nsn.util.Fields;
 
 public class Nester {
+    private static final ExecutorService THREAD_POOL = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 	public static class ScanResult {
 		final Set<String> toTransform = new HashSet<>(4096);
 		final Set<String> pluginClasses = new HashSet<>(32);
@@ -97,7 +100,7 @@ public class Nester {
 			int i = 0;
 			for (Collection<M> system : systems) {
 				//System.out.println(system.stream().map(Member::getName).collect(Collectors.joining(", ", "Analysing: [", "]")));
-				tasks[i++] = CompletableFuture.<T>supplyAsync(() -> nester.apply(system));
+                tasks[i++] = CompletableFuture.supplyAsync(() -> nester.apply(system), THREAD_POOL);
 			}
 
 			return CompletableFuture.allOf(tasks).thenApply(empty -> then.apply(tasks));
