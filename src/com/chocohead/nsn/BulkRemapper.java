@@ -88,7 +88,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		for (Entry<String, Consumer<ClassNode>> entry : toTransform.getNestTransforms().entrySet()) {
 			ClassTinkerers.addTransformation(entry.getKey(), entry.getValue());
 		}
-		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_6611"), new Consumer<ClassNode>() {
+		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("official", "net.minecraft.util.profiling.jfr.JvmProfiler"), new Consumer<ClassNode>() {
 			private void assertMethod(String owner, String name, String desc, AbstractInsnNode insn) {
 				if (insn.getType() == AbstractInsnNode.METHOD_INSN) {
 					MethodInsnNode min = (MethodInsnNode) insn;
@@ -165,7 +165,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				}
 			}
 		});
-		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_7668"), node -> {
+		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("official", "net.minecraft.server.packs.linkfs.LinkFSPath"), node -> {
 			MethodVisitor method = node.visitMethod(Opcodes.ACC_PUBLIC, "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;", null, null);
 			method.visitCode();
 			method.visitVarInsn(Opcodes.ALOAD, 0);
