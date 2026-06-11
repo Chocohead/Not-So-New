@@ -52,6 +52,7 @@ import org.spongepowered.asm.mixin.transformer.ext.Extensions;
 import org.spongepowered.asm.util.Bytecode;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.MappingResolver;
 
 import com.chocohead.mm.api.ClassTinkerers;
 import com.chocohead.nsn.Nester.ScanResult;
@@ -88,7 +89,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		for (Entry<String, Consumer<ClassNode>> entry : toTransform.getNestTransforms().entrySet()) {
 			ClassTinkerers.addTransformation(entry.getKey(), entry.getValue());
 		}
-		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_6611"), new Consumer<ClassNode>() {
+		ClassTinkerers.addTransformation(remapClassName("net.minecraft.class_6611", "net.minecraft.util.profiling.jfr.JvmProfiler"), new Consumer<ClassNode>() {
 			private void assertMethod(String owner, String name, String desc, AbstractInsnNode insn) {
 				if (insn.getType() == AbstractInsnNode.METHOD_INSN) {
 					MethodInsnNode min = (MethodInsnNode) insn;
@@ -165,7 +166,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 				}
 			}
 		});
-		ClassTinkerers.addTransformation(FabricLoader.getInstance().getMappingResolver().mapClassName("intermediary", "net.minecraft.class_7668"), node -> {
+		ClassTinkerers.addTransformation(remapClassName("net.minecraft.class_7668", "net.minecraft.server.packs.linkfs.LinkFSPath"), node -> {
 			MethodVisitor method = node.visitMethod(Opcodes.ACC_PUBLIC, "resolve", "(Ljava/lang/String;)Ljava/nio/file/Path;", null, null);
 			method.visitCode();
 			method.visitVarInsn(Opcodes.ALOAD, 0);
@@ -212,6 +213,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 		cw.visitEnd();
 		ClassTinkerers.define(name, cw.toByteArray());
+	}
+
+	private static String remapClassName(String intermediary, String mojang) {
+		MappingResolver mappings = FabricLoader.getInstance().getMappingResolver();
+		return "official".equals(mappings.getCurrentRuntimeNamespace()) ? mojang : mappings.mapClassName("intermediary", intermediary);
 	}
 
 	@Override
