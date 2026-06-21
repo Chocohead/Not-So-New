@@ -689,21 +689,35 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/ByteBuffer"));
 							break;
 
-						case "slice()Ljava/nio/ByteBuffer;":
 						case "slice(II)Ljava/nio/ByteBuffer;":
-						case "duplicate()Ljava/nio/ByteBuffer;":
-							min.setOpcode(Opcodes.INVOKESTATIC);
-							min.owner = "org/lwjgl/system/MemoryUtil";
-							min.name = prependMem(min.name);
-							min.desc = "(Ljava/nio/ByteBuffer;".concat(min.desc.substring(1));
-							break;
-
 						case "get(I[B)Ljava/nio/ByteBuffer;":
 						case "get(I[BII)Ljava/nio/ByteBuffer;":
 						case "put(ILjava/nio/ByteBuffer;II)Ljava/nio/ByteBuffer;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "com/chocohead/nsn/Buffers";
 							min.desc = "(Ljava/nio/ByteBuffer;".concat(min.desc.substring(1));
+							break;
+						}
+						break;
+					}
+
+					case "java/nio/CharBuffer": {
+						switch (min.name.concat(min.desc)) {
+						case "position(I)Ljava/nio/CharBuffer;":
+						case "limit(I)Ljava/nio/CharBuffer;":
+						case "flip()Ljava/nio/CharBuffer;":
+						case "clear()Ljava/nio/CharBuffer;":
+						case "mark()Ljava/nio/CharBuffer;":
+						case "reset()Ljava/nio/CharBuffer;":
+						case "rewind()Ljava/nio/CharBuffer;":
+							min.desc = min.desc.substring(0, min.desc.length() - 11).concat("Buffer;");
+							it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/CharBuffer"));
+							break;
+
+						case "slice(II)Ljava/nio/CharBuffer;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Buffers";
+							min.desc = "(Ljava/nio/CharBuffer;".concat(min.desc.substring(1));
 							break;
 						}
 						break;
@@ -722,12 +736,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/FloatBuffer"));
 							break;
 
-						case "slice()Ljava/nio/FloatBuffer;":
 						case "slice(II)Ljava/nio/FloatBuffer;":
-						case "duplicate()Ljava/nio/FloatBuffer;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
-							min.owner = "org/lwjgl/system/MemoryUtil";
-							min.name = prependMem(min.name);
+							min.owner = "com/chocohead/nsn/Buffers";
 							min.desc = "(Ljava/nio/FloatBuffer;".concat(min.desc.substring(1));
 							break;
 						}
@@ -747,12 +758,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/nio/IntBuffer"));
 							break;
 
-						case "slice()Ljava/nio/IntBuffer;":
 						case "slice(II)Ljava/nio/IntBuffer;":
-						case "duplicate()Ljava/nio/IntBuffer;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
-							min.owner = "org/lwjgl/system/MemoryUtil";
-							min.name = prependMem(min.name);
+							min.owner = "com/chocohead/nsn/Buffers";
 							min.desc = "(Ljava/nio/IntBuffer;".concat(min.desc.substring(1));
 							break;
 						}
@@ -2168,18 +2176,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
         }
 
 		return to;
-	}
-
-	private static String prependMem(String to) {
-		int len = to.length();
-		char[] out = new char[len + 3];
-
-		out[0] = out[2] = 'm';
-		out[1] = 'e';
-		out[3] = Character.toTitleCase(to.charAt(0));
-		to.getChars(1, len, out, 4);
-
-		return String.valueOf(out);
 	}
 
 	private static void doToArray(ListIterator<AbstractInsnNode> it, MethodInsnNode min) {
