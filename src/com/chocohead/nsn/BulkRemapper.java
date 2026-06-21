@@ -522,6 +522,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								break;
 							}
 
+							case "java/util/Enumeration": {
+								if ("asIterator".equals(handle.getName()) && "()Ljava/util/Iterator;".equals(handle.getDesc())) {
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/google/common/collect/Iterators", "forEnumeration",
+											"(Ljava/util/Enumeration;)Lcom/google/common/collect/UnmodifiableIterator;", false);
+								}
+								break;
+							}
+
 							case "java/util/List": {
 								switch (handle.getName().concat(handle.getDesc())) {
 								case "of()Ljava/util/List;":
@@ -940,6 +948,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.setOpcode(Opcodes.INVOKEINTERFACE);
 							min.name = "negate";
 							min.desc = "()Ljava/util/function/Predicate;";
+						}
+						break;
+					}
+
+					case "java/util/Enumeration": {
+						if ("asIterator".equals(min.name) && "()Ljava/util/Iterator;".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/google/common/collect/Iterators";
+							min.name = "forEnumeration";
+							min.desc = "(Ljava/util/Enumeration;)Lcom/google/common/collect/UnmodifiableIterator;";
 						}
 						break;
 					}
