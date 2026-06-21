@@ -265,6 +265,34 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		if ("java/lang/Record".equals(node.superName)) {
 			node.access &= ~Opcodes.ACC_RECORD;
 			node.superName = "java/lang/Object"; //Record only defines some abstract methods
+
+			AnnotationVisitor recordAnnotation = node.visitAnnotation("Lcom/chocohead/nsn/Recordy$Record;", true);
+			AnnotationVisitor recordComponents = recordAnnotation.visitArray("value");
+			if (node.recordComponents != null) {
+				Map<String, FieldNode> fields = new HashMap<>();
+				for (FieldNode field : node.fields) {
+					if (!Modifier.isStatic(field.access)) {
+						fields.put(field.name, field);
+					}
+				}
+
+				for (RecordComponentNode component : node.recordComponents) {
+					AnnotationVisitor componentAnnotation = recordComponents.visitAnnotation(null, "Lcom/chocohead/nsn/Recordy$Record$Component;");
+					componentAnnotation.visit("name", component.name);
+					componentAnnotation.visit("signature", component.signature != null ? component.signature : "");
+					componentAnnotation.visitEnd();
+	
+					FieldNode field = fields.get(component.name);
+					field.visibleAnnotations = mergeRecordAnnotations(component.visibleAnnotations, field.visibleAnnotations);
+					field.invisibleAnnotations = mergeRecordAnnotations(component.invisibleAnnotations, field.invisibleAnnotations);
+					field.visibleTypeAnnotations = mergeRecordAnnotations(component.visibleTypeAnnotations, field.visibleTypeAnnotations);
+					field.invisibleTypeAnnotations = mergeRecordAnnotations(component.invisibleTypeAnnotations, field.invisibleTypeAnnotations);
+				}
+			}
+			recordComponents.visitEnd();
+			recordAnnotation.visitEnd();
+		} else {
+			assert node.recordComponents == null: node.name;
 		}
 		boolean isInterface = Modifier.isInterface(node.access);
 
@@ -279,32 +307,6 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			}
 		} else {
 			privateMethods = Collections.emptySet();
-		}
-
-		if (node.recordComponents != null) {
-			Map<String, FieldNode> fields = new HashMap<>();
-			for (FieldNode field : node.fields) {
-				if (!Modifier.isStatic(field.access)) {
-					fields.put(field.name, field);
-				}
-			}
-
-			AnnotationVisitor recordAnnotation = node.visitAnnotation("Lcom/chocohead/nsn/Recordy$Record;", true);
-			AnnotationVisitor recordComponents = recordAnnotation.visitArray("value");
-			for (RecordComponentNode component : node.recordComponents) {
-				AnnotationVisitor componentAnnotation = recordComponents.visitAnnotation(null, "Lcom/chocohead/nsn/Recordy$Record$Component;");
-				componentAnnotation.visit("name", component.name);
-				componentAnnotation.visit("signature", component.signature != null ? component.signature : "");
-				componentAnnotation.visitEnd();
-
-				FieldNode field = fields.get(component.name);
-				field.visibleAnnotations = mergeRecordAnnotations(component.visibleAnnotations, field.visibleAnnotations);
-				field.invisibleAnnotations = mergeRecordAnnotations(component.invisibleAnnotations, field.invisibleAnnotations);
-				field.visibleTypeAnnotations = mergeRecordAnnotations(component.visibleTypeAnnotations, field.visibleTypeAnnotations);
-				field.invisibleTypeAnnotations = mergeRecordAnnotations(component.invisibleTypeAnnotations, field.invisibleTypeAnnotations);
-			}
-			recordComponents.visitEnd();
-			recordAnnotation.visitEnd();
 		}
 
 		Queue<MethodNode> methodQueue = new ArrayDeque<>(node.methods);
