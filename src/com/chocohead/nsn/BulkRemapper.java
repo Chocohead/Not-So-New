@@ -1009,6 +1009,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/util/SequencedCollection":
 						min.owner = "java/util/Collection";
 					case "java/util/ArrayList":
+					case "java/util/Vector":
+					case "java/util/Stack":
 					case "it/unimi/dsi/fastutil/objects/ObjectList":
 					case "it/unimi/dsi/fastutil/objects/ReferenceList": {
 						doListSequencedCollection(it, min);
