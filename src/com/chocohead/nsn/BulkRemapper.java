@@ -351,6 +351,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			if (method.desc.contains("Ljava/lang/StackWalker")) {
 				method.desc = method.desc.replace("Ljava/lang/StackWalker", "Lcom/chocohead/nsn/StackWalker");
 			}
+			if (method.desc.contains("Ljava/lang/ScopedValue")) {
+				method.desc = method.desc.replace("Ljava/lang/ScopedValue", "Lcom/chocohead/nsn/ScopedValue");
+			}
 			if (method.desc.contains("Ljava/util/SequencedCollection;")) {
 				method.desc = method.desc.replace("Ljava/util/SequencedCollection;", "Ljava/util/Collection;");
 			}
@@ -376,6 +379,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 					if (idin.desc.contains("Ljava/util/SequencedSet;")) {
 						idin.desc = idin.desc.replace("Ljava/util/SequencedSet;", "Ljava/util/Set;");
+					}
+					if (idin.desc.contains("Ljava/lang/ScopedValue$CallableOp;")) {
+						idin.desc = idin.desc.replace("Ljava/lang/ScopedValue$CallableOp;", "Lcom/chocohead/nsn/ScopedValue$FailableCallable;");
 					}
 
 					switch (idin.bsm.getOwner()) {
@@ -1684,6 +1690,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/io/ByteArrayOutputStream": {
+						if ("toString".equals(min.name) && "(Ljava/nio/charset/Charset;)Ljava/lang/String;".equals(min.desc)) {
+							it.previous();
+							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/nio/charset/Charset", "name", "()Ljava/lang/String;", false));
+							it.next();
+							min.desc = "(Ljava/lang/String;)Ljava/lang/String;";
+						}
+						break;
+					}
+
 					case "java/io/PrintStream": {
 						switch (min.name.concat(min.desc)) {
 						case "<init>(Ljava/io/OutputStream;ZLjava/nio/charset/Charset;)V":
@@ -1694,6 +1710,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.next();
 							min.desc = min.desc.replace("Ljava/nio/charset/Charset;)V", "Ljava/lang/String;)V");
 							break;
+
 						case "writeBytes([B)V":
 							min.name = "write";
 							break;
@@ -1702,7 +1719,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/io/Reader": {
-						if ("nullReader".equals(min.name) && "()Ljava/io/Reader;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "nullReader()Ljava/io/Reader;":
 							it.previous();
 							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/NullReader"));
 							it.add(new InsnNode(Opcodes.DUP));
@@ -1714,6 +1732,40 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.owner = "org/apache/commons/io/input/NullReader";
 							min.name = "<init>";
 							min.desc = "(JZZ)V";
+							break;
+
+						case "of(Ljava/lang/CharSequence;)Ljava/io/Reader;":
+							it.previous();
+							it.add(new TypeInsnNode(Opcodes.NEW, "org/apache/commons/io/input/CharSequenceReader"));
+							it.add(new InsnNode(Opcodes.DUP_X1));
+							it.add(new InsnNode(Opcodes.SWAP));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESPECIAL);
+							min.owner = "org/apache/commons/io/input/CharSequenceReader";
+							min.name = "<init>";
+							min.desc = "(Ljava/lang/CharSequence;I)V";
+							break;
+
+						case "readAllAsString()Ljava/lang/String;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/io/IOUtils";
+							min.name = "toString";
+							min.desc = "(Ljava/io/Reader;)Ljava/lang/String;";
+							break;
+
+						case "readAllLines()Ljava/util/List;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/io/IOUtils";
+							min.name = "readLines";
+							min.desc = "(Ljava/io/Reader;)Ljava/util/List;";
+							break;
+
+						case "transferTo(Ljava/io/Writer;)J":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "org/apache/commons/io/IOUtils";
+							min.name = "copyLarge";
+							min.desc = "(Ljava/io/Reader;Ljava/io/Writer;)J";
+							break;
 						}
 						break;
 					}
@@ -1823,6 +1875,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.name = "get";
 							min.itf = false;
 							break;
+
+						case "resolve(Ljava/lang/String;[Ljava/lang/String;)Ljava/nio/file/Path;":
+						case "resolve(Ljava/nio/file/Path;[Ljava/nio/file/Path;)Ljava/nio/file/Path;":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/MoreFiles";
+							min.desc = "(Ljava/nio/file/Path;".concat(min.desc.substring(1));
+							min.itf = false;
+							break;
 						}
 						break;
 					}
@@ -1858,6 +1918,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					case "java/lang/StackWalker$Option":
 					case "java/lang/StackWalker$StackFrame": {
 						min.owner = "com/chocohead/nsn/StackWalker".concat(min.owner.substring(21));
+						break;
 					}
 
 					case "java/util/ServiceLoader": {
@@ -1877,6 +1938,13 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/ScopedValue":
+					case "java/lang/ScopedValue$Carrier": {
+						min.owner = "com/chocohead/nsn/ScopedValue".concat(min.owner.substring(21));
+						min.desc = min.desc.replace("Ljava/lang/ScopedValue$CallableOp;", "Lcom/chocohead/nsn/ScopedValue$FailableCallable;").replace("java/lang/ScopedValue", "com/chocohead/nsn/ScopedValue");
+						break;
+					}
+
 					case "java/lang/Thread": {
 						switch (min.name.concat(min.desc)) {
 						case "threadId()J":
@@ -1884,6 +1952,9 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							break;
 						case "sleep(Ljava/time/Duration;)V":
 							min.owner = "org/apache/commons/lang3/ThreadUtils";
+							break;
+						case "onSpinWait()V":
+							min.name = "yield"; //Not exactly the same behaviour but it's probably better than doing nothing
 							break;
 						}
 						break;
@@ -1960,7 +2031,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						if (min.owner.startsWith("java/net/http/")) {
 							min.owner = min.owner.replace("java/net/http/", "com/chocohead/nsn/http/");
 						}
-						min.desc = min.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/Sequenced", "Ljava/util/").replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/");
+						min.desc = min.desc.replace("Ljava/lang/Record;", "Ljava/lang/Object;").replace("Ljava/util/Sequenced", "Ljava/util/")
+								.replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/").replace("Ljava/lang/ScopedValue", "Lcom/chocohead/nsn/ScopedValue");
 						break;
 					}
 					break;
@@ -1972,7 +2044,7 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					fin.desc = fin.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
 							.replace("java/util/Sequenced", "java/util/").replace("java/net/http/", "com/chocohead/nsn/http/").replace("java/lang/Record", "java/lang/Object")
 							.replace("java/lang/invoke/MethodHandles$Lookup$ClassOption", "com/chocohead/nsn/Binoculars$ClassOption").replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle")
-							.replace("java/util/HexFormat", "com/chocohead/nsn/Hexed");
+							.replace("java/util/HexFormat", "com/chocohead/nsn/Hexed").replace("java/lang/ScopedValue", "com/chocohead/nsn/ScopedValue");
 
 					if ("java/lang/StackWalker$Option".equals(fin.owner)) {
 						fin.owner = "com/chocohead/nsn/StackWalker$Option";
@@ -2113,7 +2185,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 		for (FieldNode field : node.fields) {
 			field.desc = field.desc.replace("java/lang/StackWalker", "com/chocohead/nsn/StackWalker").replace("java/lang/System$Logger", "com/chocohead/nsn/SystemLogger")
 					.replace("java/lang/Record", "java/lang/Object").replace("java/util/Sequenced", "java/util/").replace("java/net/http/", "com/chocohead/nsn/http/")
-					.replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle").replace("java/util/HexFormat", "com/chocohead/nsn/Hexed");
+					.replace("java/lang/invoke/VarHandle", "com/chocohead/nsn/VarHandle").replace("java/util/HexFormat", "com/chocohead/nsn/Hexed")
+					.replace("java/lang/ScopedValue", "com/chocohead/nsn/ScopedValue");
 		}
 
 		for (Iterator<InnerClassNode> it = node.innerClasses.iterator(); it.hasNext();) {
@@ -2147,6 +2220,18 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			case "java/lang/invoke/MethodHandles$Lookup$ClassOption": {
 				innerClass.name = "com/chocohead/nsn/Binoculars$ClassOption";
 				innerClass.outerName = "com/chocohead/nsn/Binoculars";
+				break;
+			}
+
+			case "java/lang/ScopedValue$Carrier": {
+				innerClass.name = "com/chocohead/nsn/ScopedValue$Carrier";
+				innerClass.outerName = "com/chocohead/nsn/ScopedValue";
+				break;
+			}
+
+			case "java/lang/ScopedValue$CallableOp": {
+				innerClass.name = "com/chocohead/nsn/ScopedValue$FailableCallable";
+				innerClass.outerName = "com/chocohead/nsn/ScopedValue";
 				break;
 			}
 

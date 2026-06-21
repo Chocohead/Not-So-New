@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Spliterator;
 import java.util.Spliterators;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
@@ -17,19 +16,6 @@ import com.google.common.collect.Streams;
 public class Strings {
 	public static Stream<String> lines(String from) {
 		return Streams.stream(iterLines(from));
-	}
-
-	public static void main(String[] args) {
-		System.out.println(lines("thing\nvery\rworking\r\ngreat\n").collect(Collectors.joining(", ")));
-		System.out.println(lines("thing\nvery\rworking\r\ngreat\r\ntrailing").collect(Collectors.joining(", ")));
-		System.out.println(lines("\r\n").collect(Collectors.joining(", ", "start: [", "] end")));
-		System.out.println(stripIndent("\n"+
-			      "          &lt;html&gt;\n"+
-			      "              &lt;body&gt; \n"+
-			      "                  &lt;p&gt;Hello, world&lt;/p&gt;\n"+
-			      "              &lt;/body&gt;    \n"+
-			      "          &lt;/html&gt;\n"+
-			      "          "));
 	}
 
 	private static Iterable<String> iterLines(String from) {

@@ -27,4 +27,24 @@ public class MoreFiles {
 		byte[] contents = Files.readAllBytes(Objects.requireNonNull(path, "path"));
 		return new String(contents, Objects.requireNonNull(encoding, "encoding"));
 	}
+
+	public static Path resolve(Path self, String first, String... more) {
+		Path out = self.resolve(first);
+
+		for (String path : more) {
+			out = out.resolve(path);
+		}
+
+		return out;
+	}
+
+	public static Path resolve(Path self, Path first, Path... more) {
+		Path out = self.resolve(first);
+
+		for (Path path : more) {
+			out = out.resolve(path);
+		}
+
+		return out;
+	}
 }
