@@ -5,12 +5,14 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 
 import org.spongepowered.asm.mixin.MixinEnvironment;
-import org.spongepowered.asm.mixin.transformer.ext.IExtension;
 import org.spongepowered.asm.mixin.transformer.ext.ITargetClassContext;
+import org.spongepowered.asm.mixin.transformer.ext.extensions.ExtensionCheckClass;
+import org.spongepowered.asm.util.Annotations;
 
-public class Extension implements IExtension {
+public class Extension extends ExtensionCheckClass {
 	private final String mixinPackage;
 
 	Extension(String mixinPackage) {
@@ -47,6 +49,35 @@ public class Extension implements IExtension {
 	@Override
 	public void postApply(ITargetClassContext context) {
 		context.getClassNode().signature.replaceAll('L' + mixinPackage + "[^;]+?;", "");
+
+		if (checkSugars(context.getClassNode())) {
+			for (MethodNode method : context.getClassNode().methods) {
+				for (AbstractInsnNode insn : method.instructions) {
+					if (insn.getType() == AbstractInsnNode.TYPE_INSN) {
+						TypeInsnNode tin = (TypeInsnNode) insn;
+
+						switch (tin.desc) {
+						case "java/util/SequencedSet":
+							tin.desc = "java/util/Set";
+							break;
+						case "java/util/SequencedMap":
+							tin.desc = "java/util/Map";
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	private static boolean checkSugars(ClassNode node) {
+		for (MethodNode method : node.methods) {
+			if (Annotations.get(method.invisibleAnnotations, "Lcom/llamalad7/mixinextras/sugar/SugarBridge;") != null) {
+				return true; //Most of the useful metadata is stripped by SugarInjector
+			}
+		}
+
+		return false;
 	}
 
 	@Override
