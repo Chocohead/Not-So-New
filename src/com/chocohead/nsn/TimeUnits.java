@@ -49,4 +49,8 @@ public class TimeUnits {
         	return seconds > 0 ? Long.MAX_VALUE : Long.MIN_VALUE;
         }
     }
+
+	public static boolean isPositive(Duration duration) {
+		return !duration.isNegative() && !duration.isZero();
+	}
 }

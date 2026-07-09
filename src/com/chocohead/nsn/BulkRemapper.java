@@ -870,6 +870,27 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							min.owner = "com/google/common/primitives/Floats";
 							min.name = "constrainToRange";
 							break;
+
+						case "multiplyExact(JI)J":
+						case "floorDiv(JI)J":
+							it.previous();
+							it.add(new InsnNode(Opcodes.I2L));
+							it.next();
+							min.desc = "(JJ)J";
+							break;
+
+						case "multiplyFull(II)J":
+							it.set(new InsnNode(Opcodes.I2L));
+							it.add(new InsnNode(Opcodes.DUP2_X1));
+							it.add(new InsnNode(Opcodes.POP2));
+							it.add(new InsnNode(Opcodes.I2L));
+							it.add(new InsnNode(Opcodes.LMUL));
+							break;
+
+						case "powExact(II)I":
+							min.owner = "com/google/common/math/IntMath";
+							min.name = "checkedPow";
+							break;
 						}
 						break;
 					}
@@ -1982,6 +2003,15 @@ public class BulkRemapper implements IMixinConfigPlugin {
 						break;
 					}
 
+					case "java/lang/management/ThreadInfo": {
+						if ("isDaemon".equals(min.name) && "()Z".equals(min.desc)) {
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/Threads";
+							min.desc = "(Ljava/lang/management/ThreadInfo;".concat(min.desc.substring(1));
+						}
+						break;
+					}
+
 					case "java/time/Duration": {
 						switch (min.name.concat(min.desc)) {
 						case "toNanosPart()I":
@@ -2018,6 +2048,11 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							break;
 						case "toDaysPart()J":
 							min.name = "toDays";
+							break;
+						case "isPositive()Z":
+							min.setOpcode(Opcodes.INVOKESTATIC);
+							min.owner = "com/chocohead/nsn/TimeUnits"; //Apache Commons has this from 3.12
+							min.desc = "(Ljava/time/Duration;".concat(min.desc.substring(1));
 							break;
 						}
 						break;
