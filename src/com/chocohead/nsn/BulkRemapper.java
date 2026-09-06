@@ -43,6 +43,7 @@ import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.RecordComponentNode;
+import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.TypeAnnotationNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 
@@ -367,6 +368,16 @@ public class BulkRemapper implements IMixinConfigPlugin {
 			}
 			if (method.desc.contains("Ljava/net/http/")) {
 				method.desc = method.desc.replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/");
+			}
+
+			if (method.tryCatchBlocks != null) {
+				for (TryCatchBlockNode block : method.tryCatchBlocks) {
+					if (block.type == null) continue; //Catches for finally
+
+					if ("java/lang/reflect/InaccessibleObjectException".equals(block.type)) {
+						block.type = "com/chocohead/nsn/AccessibleObjects$InaccessibleObjectException";
+					}
+				}
 			}
 
 			for (ListIterator<AbstractInsnNode> it = method.instructions.iterator(); it.hasNext();) {
@@ -1330,13 +1341,35 @@ public class BulkRemapper implements IMixinConfigPlugin {
 					}
 
 					case "java/util/SequencedMap": {
-						if ("pollFirstEntry".equals(min.name) && "()Ljava/util/Map$Entry;".equals(min.desc)) {
+						switch (min.name.concat(min.desc)) {
+						case "pollFirstEntry()Ljava/util/Map$Entry;":
 							min.setOpcode(Opcodes.INVOKESTATIC);
 							min.owner = "com/chocohead/nsn/Maps";
 							min.desc = "(Ljava/util/Map;)Ljava/util/Map$Entry;";
 							min.itf = false;
-						} else {
+							break;
+
+						case "sequencedEntrySet()Ljava/util/SequencedSet;":
 							min.owner = "java/util/Map";
+							min.name = "entrySet";
+							min.desc = "()Ljava/util/Set;";
+							break;
+
+						case "sequencedKeySet()Ljava/util/SequencedSet;":
+							min.owner = "java/util/Map";
+							min.name = "keySet";
+							min.desc = "()Ljava/util/Set;";
+							break;
+
+						case "sequencedValues()Ljava/util/SequencedCollection;":
+							min.owner = "java/util/Map";
+							min.name = "values";
+							min.desc = "()Ljava/util/Collection;";
+							break;
+
+						default:
+							min.owner = "java/util/Map";
+							break;
 						}
 						break;
 					}
@@ -1891,6 +1924,51 @@ public class BulkRemapper implements IMixinConfigPlugin {
 							it.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;", false));
 							it.next();
 							min.desc = "(Ljava/lang/String;)V";
+						}
+						break;
+					}
+
+					case "java/util/Locale": {
+						switch (min.name.concat(min.desc)) {
+						case "of(Ljava/lang/String;)Ljava/util/Locale;":
+							it.previous();
+							it.add(new TypeInsnNode(Opcodes.NEW, "java/util/Locale"));
+							it.add(new InsnNode(Opcodes.DUP_X1));
+							it.add(new InsnNode(Opcodes.SWAP));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESPECIAL);
+							min.name = "<init>";
+							min.desc = "(Ljava/lang/String;)V";
+							break;
+
+						case "of(Ljava/lang/String;Ljava/lang/String;)Ljava/util/Locale;":
+							it.previous();
+							it.add(new TypeInsnNode(Opcodes.NEW, "java/util/Locale"));
+							it.add(new InsnNode(Opcodes.DUP_X2));
+							it.add(new InsnNode(Opcodes.DUP_X2));
+							it.add(new InsnNode(Opcodes.POP));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESPECIAL);
+							min.name = "<init>";
+							min.desc = "(Ljava/lang/String;Ljava/lang/String;)V";
+							break;
+
+						case "of(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/util/Locale;":
+							it.previous();
+							it.add(new TypeInsnNode(Opcodes.NEW, "java/util/Locale"));
+							it.add(new InsnNode(Opcodes.DUP2_X1));
+							it.add(new InsnNode(Opcodes.POP2));
+							it.add(new InsnNode(Opcodes.DUP2_X2));
+							it.add(new InsnNode(Opcodes.POP));
+							it.add(new InsnNode(Opcodes.DUP2_X1));
+							it.add(new InsnNode(Opcodes.POP2));
+							it.add(new InsnNode(Opcodes.DUP2_X2));
+							it.add(new InsnNode(Opcodes.POP2));
+							it.next();
+							min.setOpcode(Opcodes.INVOKESPECIAL);
+							min.name = "<init>";
+							min.desc = "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V";
+							break;
 						}
 						break;
 					}

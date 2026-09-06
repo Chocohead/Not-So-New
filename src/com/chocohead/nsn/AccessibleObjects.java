@@ -11,6 +11,18 @@ import sun.reflect.Reflection;
 
 @SuppressWarnings("restriction")
 public class AccessibleObjects {
+	public class InaccessibleObjectException extends RuntimeException {
+		private static final long serialVersionUID = 4158786093378140901L;
+
+		public InaccessibleObjectException() {
+			super();
+		}
+
+		public InaccessibleObjectException(String message) {
+			super(message);
+		}
+	}
+
 	@SuppressWarnings("deprecation")
 	public static boolean canAccess(AccessibleObject self, Object from) {
 		if (!(self instanceof Member)) return self.isAccessible(); //Strange home-brew AccessibleObject?
