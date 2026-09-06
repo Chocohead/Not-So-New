@@ -630,6 +630,14 @@ public class BulkRemapper implements IMixinConfigPlugin {
 								break;
 							}
 
+							case "java/lang/management/ThreadInfo": {
+								if ("isDaemon".equals(handle.getName()) && "()Z".equals(handle.getDesc())) {
+									idin.bsmArgs[i] = new Handle(Opcodes.H_INVOKESTATIC, "com/chocohead/nsn/Threads", handle.getName(),
+											"(Ljava/lang/management/ThreadInfo;)Z", false);
+								}
+								break;
+							}
+
 							default: {
 								if (handle.getOwner().startsWith("java/net/http/")) {
 									idin.bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner().replace("java/net/http/", "com/chocohead/nsn/http/"), handle.getName(), handle.getDesc().replace("Ljava/net/http/", "Lcom/chocohead/nsn/http/"), handle.isInterface());
@@ -848,6 +856,8 @@ public class BulkRemapper implements IMixinConfigPlugin {
 
 					case "java/lang/Math": {
 						switch (min.name.concat(min.desc)) {
+						case "absExact(I)I":
+						case "floorDivExact(II)I":
 						case "floorMod(JI)I":
 						case "fma(DDD)D":
 						case "fma(FFF)F":

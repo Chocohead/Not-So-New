@@ -1,6 +1,26 @@
 package com.chocohead.nsn;
 
+import java.math.RoundingMode;
+
+import com.google.common.math.IntMath;
+
 public class Maths {
+	public static int absExact(int value) {
+		if (value == Integer.MIN_VALUE) {
+			throw new ArithmeticException("Overflow of Integer.MAX_VALUE + 1");
+		}
+
+		return Math.abs(value);
+	}
+
+	public static int floorDivExact(int x, int y) {
+		if (x == Integer.MIN_VALUE && y == -1) {
+			throw new ArithmeticException("Overflow of Integer.MAX_VALUE + 1");
+		}
+
+		return IntMath.divide(x, y, RoundingMode.FLOOR);
+	}
+
 	public static int floorMod(long x, int y) {
 		return (int) Math.floorMod(x, (long) y);
 	}
