@@ -4,6 +4,7 @@
 	"compatibilityLevel": "JAVA_8",
 	"plugin": "com.chocohead.nsn.BulkRemapper",
 	"mixins": [
+		"MonomorphizableDelegateMixin"
 	],
 	"client": [
 		"ServerResourcePackLoaderMixin"
